@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Kindness Repo - For Todd</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pinkapp: {
+              bg: '#FFF5F7',
+              card: '#FFFFFF',
+              primary: '#F472B6',
+              dark: '#DB2777',
+              soft: '#FCE7F3',
+              accent: '#F43F5E',
+              text: '#4A0E17',
+              muted: '#9D4C6C'
+            }
+          },
+          fontFamily: {
+            fredoka: ['Fredoka', 'sans-serif'],
+            quicksand: ['Quicksand', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Quicksand', sans-serif; background-color: #FDF2F8; }
+    .font-fredoka { font-family: 'Fredoka', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #fce7f3; }
+    ::-webkit-scrollbar-thumb { background: #f472b6; border-radius: 10px; }
+
+    .cat-avatar-frame {
+      border: 3px solid #F472B6;
+      box-shadow: 0 4px 12px rgba(244, 114, 182, 0.25);
+    }
+
+    .ticket-card {
+      position: relative;
+      background: white;
+      border: 2px dashed #F472B6;
+    }
+    .ticket-card::before, .ticket-card::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 20px;
+      height: 20px;
+      background-color: rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      transform: translateY(-50%);
+    }
+    .ticket-card::before { left: -12px; }
+    .ticket-card::after { right: -12px; }
+
+    @keyframes shake {
+      0%, 100% { transform: rotate(0deg) scale(1); }
+      20% { transform: rotate(-8deg) scale(1.05); }
+      40% { transform: rotate(8deg) scale(1.08); }
+      60% { transform: rotate(-5deg) scale(1.05); }
+      80% { transform: rotate(5deg) scale(1.02); }
+    }
+    .animate-gacha-shake {
+      animation: shake 0.3s infinite ease-in-out;
+    }
+
+    @keyframes floatCat {
+      0%, 100% { transform: translateY(0px) rotate(-1deg); }
+      50% { transform: translateY(-8px) rotate(1deg); }
+    }
+    .animate-float-cat {
+      animation: floatCat 3s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="flex justify-center items-center min-h-screen p-0 sm:p-4">
+
+  <!-- Mobile App Frame Container -->
+  <div class="w-full max-w-md bg-pinkapp-bg min-h-screen sm:min-h-[844px] sm:max-h-[900px] sm:rounded-[40px] shadow-2xl overflow-y-auto flex flex-col relative border-0 sm:border-8 border-pinkapp-dark">
+    
+    <!-- WELCOME / SPLASH SCREEN OVERLAY -->
+    <div id="welcome-screen" class="absolute inset-0 bg-gradient-to-b from-pink-100 via-pink-50 to-pink-200 z-50 flex flex-col justify-between p-6 text-center transition-all duration-500 rounded-[32px]">
+      
+      <!-- Top Decor -->
+      <div class="pt-6">
+        <span class="bg-white/80 backdrop-blur-sm text-pinkapp-dark font-fredoka text-xs font-bold px-3 py-1.5 rounded-full border border-pink-300 shadow-sm">
+          ✨ VIP PASS FOR TODD ✨
+        </span>
+      </div>
+
+      <!-- Center Funny Greeting & Cat Image -->
+      <div class="space-y-4 my-auto">
+        <div class="relative w-48 h-48 mx-auto animate-float-cat">
+          <div class="absolute inset-0 bg-pink-300 rounded-3xl blur-xl opacity-40 transform scale-95"></div>
+          <div class="relative w-full h-full bg-white p-3 rounded-3xl border-4 border-pink-400 shadow-xl overflow-hidden">
+            <img id="welcome-cat-img" src="https://lh3.googleusercontent.com/d/1ztq8_oqw9C9zDTMWmEviU3JqJRZcSO1T" alt="Funny Cat Greeting" class="w-full h-full object-cover rounded-2xl" onerror="this.src='https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500&auto=format&fit=crop&q=80'">
+          </div>
+          <!-- Sticker Badge -->
+          <span class="absolute -bottom-2 -right-2 bg-amber-400 text-amber-950 font-fredoka text-[11px] font-bold px-2.5 py-1 rounded-xl shadow-md border border-white rotate-6">
+            Cat Boss Watching! 🐾
+          </span>
+        </div>
+
+        <div class="space-y-1.5 pt-2">
+          <h2 class="font-fredoka text-2xl font-bold text-pinkapp-text leading-tight">
+            Hello, Human Todd! 🐱✨
+          </h2>
+          <p class="text-xs text-pinkapp-muted font-bold max-w-xs mx-auto leading-relaxed">
+            Welcome to your Kindness Vault! No skipping allowed until you smile! 😉
+          </p>
+        </div>
+      </div>
+
+      <!-- Bottom Enter Action -->
+      <div class="pb-6 space-y-2">
+        <button onclick="enterAppFromWelcome()" class="w-full py-3.5 bg-pinkapp-primary hover:bg-pinkapp-dark text-white font-fredoka font-bold text-sm rounded-2xl shadow-lg transition transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 border-2 border-white">
+          <span>Enter Coupon Kingdom 💖</span>
+          <i class="fa-solid fa-arrow-right text-xs"></i>
+        </button>
+        <p class="text-[10px] text-pinkapp-muted font-bold uppercase tracking-wider">
+          Powered by Kindness & Silly Cats 🐾
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Status Bar Mock -->
+    <div class="sticky top-0 bg-pinkapp-bg/90 backdrop-blur-md z-30 px-6 pt-3 pb-2 flex justify-between items-center text-xs text-pinkapp-muted font-medium border-b border-pink-100">
+      <span>09:41</span>
+      <div class="flex items-center gap-1.5">
+        <i class="fa-solid fa-signal"></i>
+        <i class="fa-solid fa-wifi"></i>
+        <i class="fa-solid fa-battery-full text-pinkapp-primary"></i>
+      </div>
+    </div>
+
+    <!-- App Header -->
+    <header class="px-6 pt-4 pb-3 flex justify-between items-center bg-white shadow-sm border-b border-pink-100 relative z-20">
+      <div class="flex items-center gap-3">
+        <div class="relative w-12 h-12 rounded-full overflow-hidden cat-avatar-frame bg-pink-100 flex items-center justify-center shrink-0">
+          <img id="header-avatar-img" src="https://lh3.googleusercontent.com/d/1IBslq019E70yBL_TPFe8jXlYB4N1nT4w" alt="Cute Silly Cat" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=200&auto=format&fit=crop&q=80'">
+          <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-white rounded-full"></span>
+        </div>
+        <div>
+          <h1 class="font-fredoka text-lg font-bold text-pinkapp-text leading-tight">The Kindness <span class="text-pinkapp-primary">Repo</span></h1>
+          <p class="text-xs text-pinkapp-muted flex items-center gap-1 font-semibold">
+            <i class="fa-solid fa-paw text-pinkapp-primary"></i> Prepared for Todd 🐾
+          </p>
+        </div>
+      </div>
+      
+      <div id="header-gift-badge" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-not-allowed shadow-sm" title="Unlocks on Birthday (Sep 9)">
+        <i class="fa-solid fa-lock text-base"></i>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-5 space-y-5">
+
+      <!-- Dynamic Daily Affirmation Banner -->
+      <div class="bg-gradient-to-r from-pink-100 via-rose-100 to-pink-50 p-4 rounded-3xl border border-pink-200 shadow-sm relative overflow-hidden">
+        <div class="flex items-start gap-3">
+          <div class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-pink-300 shadow shrink-0 bg-white">
+            <img id="daily-spark-img" src="https://lh3.googleusercontent.com/d/1ytrf6iSJN4fYhDQrm_F3TFIx956lT42u" alt="Silly Cat" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=200&auto=format&fit=crop&q=80'">
+          </div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center">
+              <span class="font-fredoka text-[11px] font-bold text-pinkapp-dark uppercase tracking-wider bg-pink-200/80 px-2 py-0.5 rounded-full">Daily Spark ✨</span>
+              <span id="current-date-badge" class="text-[10px] text-pinkapp-muted font-bold">Today</span>
+            </div>
+            <p id="quote-text" class="text-xs font-semibold text-pinkapp-text mt-1.5 leading-relaxed">
+              Loading your daily gentle boost...
+            </p>
+            <button onclick="getRandomQuote()" class="mt-2.5 px-3 py-1 bg-pinkapp-primary hover:bg-pinkapp-dark text-white text-[11px] font-fredoka font-semibold rounded-lg shadow-sm transition flex items-center gap-1">
+              <i class="fa-solid fa-shuffle"></i> Refresh Spark
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic Birthday Banner (Countdown / Celebration) -->
+      <div id="bday-banner" class="bg-gradient-to-r from-pink-500 to-rose-500 text-white p-4 rounded-3xl shadow-md flex justify-between items-center relative overflow-hidden">
+        <div>
+          <span class="text-xs font-fredoka text-pink-100 font-semibold tracking-wide uppercase">SPECIAL REWARD UNLOCK ⏳</span>
+          <h3 id="bday-banner-title" class="text-lg font-bold font-fredoka text-white mt-0.5">Birthday Countdown</h3>
+          <p id="bday-banner-timer" class="text-xs font-mono font-bold text-pink-100 mt-1 bg-black/20 px-2.5 py-1 rounded-lg inline-block">Calculating time...</p>
+        </div>
+        <div class="bg-white/20 backdrop-blur-md p-3 rounded-2xl border border-white/30 text-center">
+          <i id="bday-banner-icon" class="fa-solid fa-lock text-2xl text-white"></i>
+        </div>
+      </div>
+
+      <!-- Category Tabs -->
+      <div class="flex gap-2 border-b border-pink-100 pb-2 text-xs font-fredoka font-semibold">
+        <button onclick="switchTab('ready')" id="tab-ready" class="px-4 py-2 rounded-full bg-pinkapp-primary text-white shadow-sm transition flex-1 text-center">
+          <i class="fa-solid fa-bolt mr-1"></i> Standard Passes
+        </button>
+        <button onclick="switchTab('bday')" id="tab-bday" class="px-4 py-2 rounded-full bg-pink-100 text-pinkapp-muted hover:bg-pink-200 transition flex-1 text-center flex items-center justify-center gap-1">
+          <i id="tab-bday-icon" class="fa-solid fa-lock text-xs"></i> Birthday Unlocked 🎁
+        </button>
+      </div>
+
+      <!-- Section 1: Standard Passes -->
+      <div id="section-ready" class="space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="font-fredoka text-sm font-bold text-pinkapp-text">Always Available</h2>
+          <span class="text-xs text-pinkapp-dark bg-pink-100 px-2.5 py-0.5 rounded-full font-bold">4 Cards</span>
+        </div>
+        <div id="card-container-ready" class="space-y-3"></div>
+      </div>
+
+      <!-- Section 2: Birthday Unlocked Passes -->
+      <div id="section-bday" class="space-y-3 hidden">
+        <div class="flex justify-between items-center">
+          <h2 class="font-fredoka text-sm font-bold text-pinkapp-text">Unlocked Birthday Rewards</h2>
+          <span id="bday-deck-count" class="text-xs text-pinkapp-dark bg-pink-100 px-2.5 py-0.5 rounded-full font-bold">9 Decks</span>
+        </div>
+        <div id="card-container-bday" class="space-y-3"></div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- AUTO-LAUNCH BIRTHDAY POPUP SEQUENCE MODAL (Unlocks strictly on Birthday) -->
+  <div id="bday-sequence-modal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex justify-center items-center p-4 hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-4 shadow-2xl border-4 border-pink-300 relative overflow-hidden transform transition-all">
+      
+      <!-- Step 1: HBD1 Image Display -->
+      <div id="bday-step-1" class="space-y-4">
+        <div class="bg-pink-100 p-2 rounded-2xl border-2 border-pink-200 shadow-inner">
+          <img src="https://lh3.googleusercontent.com/d/10KKUufcVivQDdccExsE4SKjSJyPNiLp-" alt="Happy Birthday Todd!" class="w-full h-60 object-cover rounded-xl shadow" onerror="this.src='https://images.unsplash.com/photo-1513151233558-d860c5398176?w=500&auto=format&fit=crop&q=80'">
+        </div>
+        <div>
+          <span class="text-xs font-fredoka font-bold text-pinkapp-dark bg-pink-100 px-3 py-1 rounded-full">Step 1 of 3 🎉</span>
+          <h3 class="font-fredoka font-bold text-pinkapp-text text-xl mt-2">Happy Birthday, Todd! ✨</h3>
+        </div>
+        <button onclick="goToBdayStep(2)" class="w-full py-3 bg-pinkapp-primary hover:bg-pinkapp-dark text-white font-fredoka font-bold text-sm rounded-2xl shadow-md transition flex items-center justify-center gap-2">
+          Next <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- Step 2: HBD2 Image Display -->
+      <div id="bday-step-2" class="space-y-4 hidden">
+        <div class="bg-pink-100 p-2 rounded-2xl border-2 border-pink-200 shadow-inner">
+          <img src="https://lh3.googleusercontent.com/d/1NhbjQs1RF_Y2a-EfzLrV3VkUJLE312n8" alt="Party Time Todd!" class="w-full h-60 object-cover rounded-xl shadow" onerror="this.src='https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=500&auto=format&fit=crop&q=80'">
+        </div>
+        <div>
+          <span class="text-xs font-fredoka font-bold text-pinkapp-dark bg-pink-100 px-3 py-1 rounded-full">Step 2 of 3 🥳</span>
+          <h3 class="font-fredoka font-bold text-pinkapp-text text-xl mt-2">Let's Party & Celebrate! 🥂✨</h3>
+        </div>
+        <button onclick="goToBdayStep(3)" class="w-full py-3 bg-pinkapp-primary hover:bg-pinkapp-dark text-white font-fredoka font-bold text-sm rounded-2xl shadow-md transition flex items-center justify-center gap-2">
+          Next <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- Step 3: English Birthday Wish Letter -->
+      <div id="bday-step-3" class="space-y-4 text-left hidden">
+        <div class="text-center">
+          <span class="text-xs font-fredoka font-bold text-pinkapp-dark bg-pink-100 px-3 py-1 rounded-full">Special Birthday Message 💖</span>
+          <h3 class="font-fredoka font-bold text-pinkapp-text text-xl mt-1">Happy Birthday, Todd! 🎂✨</h3>
+        </div>
+
+        <div class="bg-pink-50 p-4 rounded-2xl border border-pink-200 max-h-64 overflow-y-auto text-xs text-pinkapp-text font-medium leading-relaxed space-y-2.5 shadow-inner">
+          <p class="font-bold text-pinkapp-dark">Dear Todd,</p>
+          <p>First of all, thank you so much for fighting and staying strong until today, which brought us together.</p>
+          <p>From now on, I wish you simple happiness, a peaceful mind, deep focus, mindfulness, and a truly comfortable, peaceful heart.</p>
+          <p>May you always be surrounded by wonderful, kind people. May your work and finances flourish and make great progress.</p>
+          <p>I hope you get to eat your favorite meals every single day, stay in good health, achieve your dream body, be deeply loved and cherished, and have a warm, comforting love in your heart.</p>
+          <p>You are truly amazing! From now on, please don't forget to be extra kind to yourself.</p>
+          <p class="font-fredoka font-bold text-pinkapp-dark text-center pt-2 text-sm">
+            Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋💋✨
+          </p>
+        </div>
+
+        <button onclick="closeBdayModal()" class="w-full py-3 bg-pinkapp-primary hover:bg-pinkapp-dark text-white font-fredoka font-bold text-sm rounded-2xl shadow-md transition text-center block">
+          Enter App & Claim Passes 💕
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- STEP 1: INITIAL CARD SELECTION & NOTE MODAL -->
+  <div id="app-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4 hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl transform transition-all scale-95 opacity-0 border-2 border-pink-200" id="modal-box">
+      
+      <div id="modal-icon-bg" class="w-16 h-16 rounded-full flex items-center justify-center text-3xl mx-auto text-white shadow-lg relative">
+        <i id="modal-icon" class="fa-solid fa-gift"></i>
+      </div>
+      
+      <div>
+        <h3 id="modal-title" class="font-fredoka font-bold text-pinkapp-text text-lg">Title</h3>
+        <p id="modal-desc" class="text-xs text-pinkapp-muted mt-1 leading-relaxed font-medium">Card Description</p>
+        <span id="modal-expiry-tag" class="inline-block mt-2 text-[10px] font-fredoka font-semibold px-2.5 py-0.5 rounded-full bg-pink-100 text-pinkapp-dark"></span>
+      </div>
+
+      <!-- Action Note Area -->
+      <div class="space-y-1.5 text-left bg-pink-50 p-3 rounded-2xl border border-pink-200">
+        <label for="modal-user-note" class="block text-xs font-fredoka font-bold text-pinkapp-dark flex justify-between">
+          <span>💬 Note Your Details:</span>
+          <span id="note-required-badge" class="text-[10px] text-rose-500 font-bold hidden">* REQUIRED FIELD</span>
+        </label>
+        <textarea id="modal-user-note" rows="2" placeholder="Specify date, time, location, or activity..." class="w-full text-xs p-2.5 rounded-xl border border-pink-200 focus:outline-none focus:ring-2 focus:ring-pinkapp-primary bg-white text-pinkapp-text resize-none font-medium"></textarea>
+        <p id="note-error-msg" class="text-[10px] text-rose-500 font-bold hidden text-center">⚠️ Please fill in the note details before redeeming!</p>
+      </div>
+
+      <!-- Actions -->
+      <div class="pt-1 space-y-2">
+        <button onclick="proceedToGachaAnimation()" class="w-full py-3 bg-pinkapp-primary hover:bg-pinkapp-dark text-white font-fredoka font-bold text-sm rounded-xl shadow transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-dice text-base"></i> Roll Single-Use Gacha & Redeem 🐾
+        </button>
+
+        <button onclick="closeModal()" class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 font-fredoka font-semibold text-xs rounded-xl transition">
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- STEP 2: LIGHTWEIGHT GACHA SPINNING ANIMATION MODAL -->
+  <div id="gacha-anim-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4 hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl border-4 border-pink-400">
+      <div id="gacha-anim-icon-bg" class="w-20 h-20 rounded-full flex items-center justify-center text-4xl mx-auto text-white shadow-xl animate-gacha-shake bg-pink-500">
+        <i id="gacha-anim-icon" class="fa-solid fa-dice-d20"></i>
+      </div>
+      <div>
+        <h3 id="gacha-anim-title" class="font-fredoka font-bold text-pinkapp-text text-lg">🎰 Rolling Pass Perk...</h3>
+        <p id="gacha-anim-desc" class="text-xs text-pinkapp-muted mt-2 leading-relaxed font-medium">Applying special modifier for this pass...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: FINAL MISSION TICKET DISPLAY MODAL (DIRECT TO YOU) -->
+  <div id="coupon-modal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex justify-center items-center p-4 hidden">
+    <div class="w-full max-w-xs space-y-4 text-center">
+      
+      <!-- Ticket Container for HTML2Canvas Capturing -->
+      <div id="ticket-capture-target" class="ticket-card bg-gradient-to-b from-white via-pink-50 to-pink-100 p-6 rounded-3xl shadow-2xl text-left border-2 border-pink-300 relative overflow-hidden">
+        
+        <div class="flex justify-between items-center border-b-2 border-pink-200 pb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-ticket text-pinkapp-primary text-xl"></i>
+            <span class="font-fredoka font-bold text-pinkapp-dark text-sm">MISSION DUTY TICKET</span>
+          </div>
+          <span class="text-[10px] bg-pink-200 text-pinkapp-dark px-2 py-0.5 rounded-full font-bold">SEND TO ME!</span>
+        </div>
+
+        <div class="py-4 text-center space-y-2">
+          <div id="ticket-icon-bg" class="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-2xl text-white shadow-md bg-pink-500">
+            <i id="ticket-icon" class="fa-solid fa-gift"></i>
+          </div>
+          <h3 id="ticket-title" class="font-fredoka font-bold text-pinkapp-text text-base leading-snug">Pass Title</h3>
+          <p id="ticket-desc" class="text-xs text-pinkapp-muted font-medium">Description</p>
+        </div>
+
+        <!-- Single-Use Gacha Effect Banner (Inside Ticket) -->
+        <div id="ticket-gacha-badge" class="mb-3 p-2.5 rounded-2xl border text-xs font-semibold space-y-0.5">
+          <div class="flex justify-between items-center font-fredoka font-bold">
+            <span id="ticket-gacha-rarity">✨ SINGLE-PASS GACHA PERK</span>
+            <span id="ticket-gacha-card-name">PERK NAME</span>
+          </div>
+          <p id="ticket-gacha-desc" class="text-[11px] leading-tight opacity-90">Bonus effect details</p>
+        </div>
+
+        <div class="bg-white/80 backdrop-blur-sm p-3 rounded-2xl border border-pink-200 space-y-1 text-xs">
+          <p class="text-pinkapp-dark font-bold font-fredoka flex justify-between">
+            <span>💬 Todd's Request Note:</span>
+          </p>
+          <p id="ticket-note-text" class="text-gray-700 italic font-medium">None</p>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-pink-200 flex justify-between items-center text-[10px] text-pinkapp-muted font-bold font-fredoka">
+          <span id="ticket-date-stamp">Date: Today</span>
+          <span id="ticket-expiry-stamp" class="text-rose-500">Exp: Nov 30, 2026</span>
+        </div>
+
+        <div class="mt-2 text-center text-[9px] text-pink-400 font-semibold uppercase tracking-widest">
+          The Kindness Repo • Deliver Ticket To Me
+        </div>
+      </div>
+
+      <!-- Mandatory Reminder Note for Todd -->
+      <div class="bg-pink-100/90 border border-pink-300 p-2.5 rounded-2xl text-pinkapp-dark text-[11px] font-semibold flex items-center gap-2 text-left shadow-sm">
+        <i class="fa-solid fa-paper-plane text-pinkapp-primary text-base shrink-0"></i>
+        <span>Hey Todd! Send this duty ticket directly to my phone right now so I can get to work for you! 📲💕</span>
+      </div>
+
+      <!-- Actions Buttons: Directed to You -->
+      <div class="space-y-2">
+        <button onclick="sendToWhatsApp()" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-fredoka font-bold text-sm rounded-2xl shadow-lg transition flex items-center justify-center gap-2">
+          <i class="fa-brands fa-whatsapp text-lg"></i> Send Duty Ticket to Me 💬
+        </button>
+
+        <button onclick="downloadCouponImage()" class="w-full py-3 bg-pinkapp-primary hover:bg-pinkapp-dark text-white font-fredoka font-bold text-sm rounded-2xl shadow-lg transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-download"></i> Save Ticket to My Phone 📸
+        </button>
+
+        <button onclick="closeCouponModal()" class="w-full py-2 bg-white/20 hover:bg-white/30 text-white font-fredoka font-semibold text-xs rounded-xl transition">
+          Close Window
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // GOOGLE DRIVE CAT IMAGES ARRAY
+    const googleDriveCatImages = [
+      "https://lh3.googleusercontent.com/d/1ztq8_oqw9C9zDTMWmEviU3JqJRZcSO1T",
+      "https://lh3.googleusercontent.com/d/1ytrf6iSJN4fYhDQrm_F3TFIx956lT42u",
+      "https://lh3.googleusercontent.com/d/1vRJ8NVf3PrKPdECo-9vs9JEJ0J4_uDbb",
+      "https://lh3.googleusercontent.com/d/1Tc6wTAjEjNlCw_02HUTSfVm2hkDBgZGy",
+      "https://lh3.googleusercontent.com/d/1JyFXLtvW6CiKAXWaPxeVV3oeFgdUm7w1",
+      "https://lh3.googleusercontent.com/d/1JxupLqKAC2Vh846CHHQDppfzNR-9MkTj",
+      "https://lh3.googleusercontent.com/d/1I2ENtsxIbgSL5KYvVVNzMY1dzV84tzWl",
+      "https://lh3.googleusercontent.com/d/108cBnkzJjfYOpjM5y7w5YmqdXEoh-OEZ",
+      "https://lh3.googleusercontent.com/d/1H4DYyxa5RuHHjrqdHf04Kk_nvUwi1iW0",
+      "https://lh3.googleusercontent.com/d/1y0ma5w8sqVIdqLKfuM4RD_nJYMSPV9E0",
+      "https://lh3.googleusercontent.com/d/1kg3FDn7Csv_Sc6GXDahgK_f-lFitfp2U"
+    ];
+
+    function getRandomCatImage() {
+      return googleDriveCatImages[Math.floor(Math.random() * googleDriveCatImages.length)];
+    }
+
+    let currentCardObj = null;
+    let currentNoteUsed = '';
+    let currentGachaResult = null;
+    let isBirthdayUnlocked = false;
+
+    // TARGET BIRTHDAY: September 9, 2026 00:00:00 Thailand Time (UTC+7)
+    function getBirthdayTargetDate() {
+      return new Date("2026-09-09T00:00:00+07:00");
+    }
+
+    const dailyAffirmations = [
+      "You are capable of amazing things! Keep shining soft and bright.",
+      "Take a deep breath. You are doing so much better than you think!",
+      "You deserve gentle peace, tasty food, and absolute comfort today.",
+      "Whatever comes your way, you have the grace and strength to handle it.",
+      "Never forget how truly valuable, loved, and special you are!",
+      "Sending you a warm hug! Remember to be extra kind to yourself today.",
+      "Your hard work matters, but your rest and happiness matter most!"
+    ];
+
+    let readyCards = [
+      { id: 'book_1day', title: 'Book Me for 1 Day', desc: 'Reserve my entire day! (Notify 3-5 days in advance) 📅✨', icon: 'fa-calendar-check', bgColor: 'bg-pink-500', emoji: '🗓️💖', total: 1, used: 0, expiry: 'Never Expires', requireNote: true },
+      { id: 'book_long', title: 'Book Me (7-10 Days)', desc: 'Reserve me for long trips! (Fixed duration, max leave limit) 🚗🏖️', icon: 'fa-calendar-days', bgColor: 'bg-rose-500', emoji: '✈️🌴', total: 1, used: 0, expiry: 'Never Expires', requireNote: true },
+      { id: 'dinner_pick', title: 'Pick A Dinner Place', desc: 'Choose any restaurant — dinner is completely on me! 🍽️🥂', icon: 'fa-utensils', bgColor: 'bg-pink-600', emoji: '🍲🍷', total: 1, used: 0, expiry: 'Never Expires', requireNote: true },
+      { id: 'chauffeur', title: 'Pick a Spot (I Drive)', desc: 'Name your destination and I will gladly drive you! 🚗💨', icon: 'fa-car-side', bgColor: 'bg-rose-400', emoji: '🚘📍', total: 1, used: 0, expiry: 'Never Expires', requireNote: true }
+    ];
+
+    let bdayUnlockedCards = [
+      { id: 'bday_massage_classic', title: 'Relaxing Classic Massage (30 mins)', desc: '30-minute relaxing body massage session given by me 💆‍♀️', total: 1, used: 0, icon: 'fa-spa', bgColor: 'bg-pink-500', emoji: '💆‍♀️', expiry: 'Nov 30, 2026', requireNote: false },
+      { id: 'bday_massage_oil', title: 'Nourishing Body Oil Massage (30 mins)', desc: '30-minute essential oil massage given by me 🧴', total: 1, used: 0, icon: 'fa-bottle-droplet', bgColor: 'bg-rose-500', emoji: '🧴', expiry: 'Nov 30, 2026', requireNote: false },
+      { id: 'bday_massage_aroma', title: 'Aromatic Therapy Massage (40 mins)', desc: '40-minute full aroma therapy session given by me 🌿', total: 1, used: 0, icon: 'fa-wind', bgColor: 'bg-pink-600', emoji: '🌿', expiry: 'Nov 30, 2026', requireNote: false },
+      { id: 'bday_wildcard', title: 'Wildcard: Anything You Wish', desc: 'Granted for whatever you desire from me! 🪄⭐', total: 3, used: 0, icon: 'fa-wand-magic-sparkles', bgColor: 'bg-amber-500', emoji: '🪄⭐', expiry: 'Nov 30, 2026', requireNote: true },
+      { id: 'bday_as_you_wish', title: 'As You Wish (1 Full Day)', desc: 'Whatever you say goes for 24 full hours! 👑', total: 1, used: 0, icon: 'fa-crown', bgColor: 'bg-yellow-500', emoji: '👑', expiry: 'Nov 30, 2026', requireNote: true },
+      { id: 'bday_meal', title: 'Special Birthday Meal Treat', desc: 'Delicious feast of your choice, treated by me 🎂', total: 1, used: 0, icon: 'fa-cake-candles', bgColor: 'bg-rose-600', emoji: '🎂', expiry: 'Nov 30, 2026', requireNote: true },
+      { id: 'bday_dnd', title: 'Do Not Disturb Pass (3 Hours)', desc: '3 hours of total uninterrupted peace for you 🤫', total: 2, used: 0, icon: 'fa-volume-xmark', bgColor: 'bg-slate-600', emoji: '🤫', expiry: 'Nov 30, 2026', requireNote: false },
+      { id: 'bday_forgive', title: 'Instant Forgiveness Pass', desc: 'Bypass any minor disagreement immediately 🥺', total: 2, used: 0, icon: 'fa-face-smile-beam', bgColor: 'bg-pink-400', emoji: '🥺', expiry: 'Nov 30, 2026', requireNote: false },
+      { id: 'bday_quality', title: 'Quality Time Pass (1hr+)', desc: 'Dedicated 1+ hour uninterrupted bonding with me 👩‍❤️‍👨', total: 2, used: 0, icon: 'fa-heart', bgColor: 'bg-rose-400', emoji: '👩‍❤️‍👨', expiry: 'Nov 30, 2026', requireNote: false }
+    ];
+
+    const singlePassGachaPool = [
+      { rarity: 'UR 👑', name: 'DOUBLE UP PERK', desc: 'Applies ONLY to this pass: Doubles the duration or treatment level!', icon: 'fa-crown', styleClass: 'bg-amber-100 border-amber-300 text-amber-900' },
+      { rarity: 'SSR ⭐', name: 'VIP EXPRESS PERK', desc: 'Applies ONLY to this pass: Priority booking with zero delay!', icon: 'fa-star', styleClass: 'bg-purple-100 border-purple-300 text-purple-900' },
+      { rarity: 'SR 💖', name: 'SWEET TREAT ADD-ON', desc: 'Applies ONLY to this pass: Includes a free favorite dessert/snack treat!', icon: 'fa-cookie-bite', styleClass: 'bg-pink-100 border-pink-300 text-pink-900' },
+      { rarity: 'COMMON ✨', name: 'STANDARD PLUS PERK', desc: 'Applies ONLY to this pass: Comes with extra cozy vibes & care!', icon: 'fa-sparkles', styleClass: 'bg-sky-100 border-sky-300 text-sky-900' }
+    ];
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Randomize Welcome Screen & Spark Images
+      document.getElementById('welcome-cat-img').src = getRandomCatImage();
+      document.getElementById('daily-spark-img').src = getRandomCatImage();
+      document.getElementById('header-avatar-img').src = getRandomCatImage();
+
+      checkDailyAffirmation();
+      renderReadyCards();
+      startBirthdayCountdownWatcher();
+    });
+
+    function enterAppFromWelcome() {
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.7 } });
+      playAudioTone(600, 'triangle', 0.15);
+      
+      const welcome = document.getElementById('welcome-screen');
+      welcome.classList.add('opacity-0', 'scale-105', 'pointer-events-none');
+      setTimeout(() => {
+        welcome.classList.add('hidden');
+        if (isBirthdayUnlocked) {
+          openBirthdayModalDirectly();
+        }
+      }, 500);
+    }
+
+    function playAudioTone(freq = 440, type = 'sine', duration = 0.1) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + duration);
+        osc.stop(ctx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    function playCelebrationFanfare() {
+      try {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          setTimeout(() => {
+            playAudioTone(freq, 'triangle', 0.25);
+          }, idx * 120);
+        });
+      } catch(e) {}
+    }
+
+    function checkDailyAffirmation() {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), 0, 0);
+      const diff = now - start;
+      const oneDay = 1000 * 60 * 60 * 24;
+      const dayOfYear = Math.floor(diff / oneDay);
+
+      const todayQuote = dailyAffirmations[dayOfYear % dailyAffirmations.length];
+      document.getElementById('quote-text').innerText = `"${todayQuote}"`;
+      document.getElementById('current-date-badge').innerText = `${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+
+    function getRandomQuote() {
+      playAudioTone(600, 'sine', 0.1);
+      const random = dailyAffirmations[Math.floor(Math.random() * dailyAffirmations.length)];
+      document.getElementById('quote-text').innerText = `"${random}"`;
+      document.getElementById('daily-spark-img').src = getRandomCatImage();
+    }
+
+    function startBirthdayCountdownWatcher() {
+      const bdayTarget = getBirthdayTargetDate();
+
+      function updateTimer() {
+        const now = new Date();
+        const diff = bdayTarget - now;
+
+        if (diff <= 0) {
+          if (!isBirthdayUnlocked) {
+            unlockBirthdaySystem();
+          }
+          document.getElementById('bday-banner-title').innerText = "Happy Birthday, Todd! 🎉";
+          document.getElementById('bday-banner-timer').innerText = "ALL REWARDS UNLOCKED!";
+          document.getElementById('bday-banner-icon').className = "fa-solid fa-cake-candles text-2xl text-white";
+        } else {
+          isBirthdayUnlocked = false;
+          renderBdayCardsLocked();
+
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+          const minutes = Math.floor((diff / 1000 / 60) % 60);
+          const seconds = Math.floor((diff / 1000) % 60);
+
+          document.getElementById('bday-banner-title').innerText = "Birthday Countdown ⏳";
+          document.getElementById('bday-banner-timer').innerText = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+          document.getElementById('bday-banner-icon').className = "fa-solid fa-lock text-2xl text-white";
+        }
+      }
+
+      updateTimer();
+      setInterval(updateTimer, 1000);
+    }
+
+    function unlockBirthdaySystem() {
+      isBirthdayUnlocked = true;
+
+      document.getElementById('tab-bday-icon').className = "fa-solid fa-gift text-xs";
+      const headerBtn = document.getElementById('header-gift-badge');
+      headerBtn.className = "w-10 h-10 rounded-full bg-pink-100 hover:bg-pink-200 flex items-center justify-center text-pinkapp-dark transition shadow cursor-pointer";
+      headerBtn.onclick = openBirthdayModalDirectly;
+      headerBtn.title = "Replay Birthday Wish";
+
+      renderBdayCards();
+    }
+
+    function openBirthdayModalDirectly() {
+      if (!isBirthdayUnlocked) {
+        alert("🔒 Birthday wishes & rewards unlock strictly on September 9th!");
+        return;
+      }
+      goToBdayStep(1);
+      document.getElementById('bday-sequence-modal').classList.remove('hidden');
+    }
+
+    function goToBdayStep(step) {
+      playAudioTone(500, 'triangle', 0.1);
+      document.getElementById('bday-step-1').classList.add('hidden');
+      document.getElementById('bday-step-2').classList.add('hidden');
+      document.getElementById('bday-step-3').classList.add('hidden');
+
+      document.getElementById(`bday-step-${step}`).classList.remove('hidden');
+    }
+
+    function closeBdayModal() {
+      playAudioTone(800, 'sine', 0.2);
+      document.getElementById('bday-sequence-modal').classList.add('hidden');
+    }
+
+    function switchTab(tab) {
+      playAudioTone(450, 'sine', 0.08);
+      document.getElementById('section-ready').classList.add('hidden');
+      document.getElementById('section-bday').classList.add('hidden');
+
+      document.getElementById('tab-ready').className = "px-4 py-2 rounded-full bg-pink-100 text-pinkapp-muted hover:bg-pink-200 transition flex-1 text-center";
+      document.getElementById('tab-bday').className = "px-4 py-2 rounded-full bg-pink-100 text-pinkapp-muted hover:bg-pink-200 transition flex-1 text-center flex items-center justify-center gap-1";
+
+      if(tab === 'ready') {
+        document.getElementById('section-ready').classList.remove('hidden');
+        document.getElementById('tab-ready').className = "px-4 py-2 rounded-full bg-pinkapp-primary text-white shadow-sm transition flex-1 text-center";
+      } else {
+        document.getElementById('section-bday').classList.remove('hidden');
+        document.getElementById('tab-bday').className = "px-4 py-2 rounded-full bg-pinkapp-primary text-white shadow-sm transition flex-1 text-center flex items-center justify-center gap-1";
+      }
+    }
+
+    function renderReadyCards() {
+      const container = document.getElementById('card-container-ready');
+      container.innerHTML = '';
+
+      readyCards.forEach(card => {
+        const remaining = card.total - card.used;
+        const isUsedUp = remaining <= 0;
+        
+        container.innerHTML += `
+          <div onclick="openCardModal('${card.id}', 'ready')" class="bg-white p-4 rounded-2xl border ${isUsedUp ? 'border-gray-200 opacity-60' : 'border-pink-100'} shadow-sm hover:shadow-md transition cursor-pointer flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-xl ${card.bgColor} text-white flex items-center justify-center text-xl shadow">
+                  <i class="fa-solid ${card.icon}"></i>
+                </div>
+                <div>
+                  <h3 class="font-fredoka font-bold text-pinkapp-text text-sm flex items-center gap-1.5">
+                    ${card.title} <span>${card.emoji}</span>
+                  </h3>
+                  <p class="text-xs text-pinkapp-muted font-medium mt-0.5">${card.desc}</p>
+                </div>
+              </div>
+              <span class="text-xs font-fredoka font-bold ${isUsedUp ? 'bg-gray-200 text-gray-500' : 'bg-pink-100 text-pinkapp-dark'} px-3 py-1 rounded-full shrink-0">
+                ${isUsedUp ? 'Used' : `Left ${remaining}`}
+              </span>
+            </div>
+            <div class="flex justify-between items-center pt-2 border-t border-pink-50 text-[11px] font-fredoka">
+              <span class="text-emerald-600 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-infinity"></i> ${card.expiry}
+              </span>
+              <span class="text-pinkapp-muted">Includes Gacha Perk • Tap to redeem →</span>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function renderBdayCardsLocked() {
+      const container = document.getElementById('card-container-bday');
+      container.innerHTML = `
+        <div class="bg-pink-50/70 p-6 rounded-3xl border-2 border-dashed border-pink-200 text-center space-y-3 my-4">
+          <div class="w-14 h-14 bg-pink-100 text-pinkapp-dark rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">
+            <i class="fa-solid fa-lock"></i>
+          </div>
+          <div>
+            <h3 class="font-fredoka font-bold text-pinkapp-text text-base">Deck Locked Until Birthday</h3>
+            <p class="text-xs text-pinkapp-muted font-medium mt-1">This special birthday reward deck will automatically unlock on September 9, 2026 at 00:00 THA time!</p>
+          </div>
+          <span class="inline-block text-[10px] font-fredoka font-bold px-3 py-1 bg-pink-200 text-pinkapp-dark rounded-full">
+            🔒 9 Reward Cards Hidden
+          </span>
+        </div>
+      `;
+    }
+
+    function renderBdayCards() {
+      const container = document.getElementById('card-container-bday');
+      container.innerHTML = '';
+
+      bdayUnlockedCards.forEach(card => {
+        const remaining = card.total - card.used;
+        const isUsedUp = remaining <= 0;
+
+        container.innerHTML += `
+          <div onclick="openCardModal('${card.id}', 'bday')" class="bg-gradient-to-r from-pink-50 to-rose-50 p-4 rounded-2xl border ${isUsedUp ? 'border-gray-200 opacity-60' : 'border-pink-200'} shadow-sm hover:shadow-md transition cursor-pointer flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-xl ${card.bgColor} text-white flex items-center justify-center text-xl shadow">
+                  <i class="fa-solid ${card.icon}"></i>
+                </div>
+                <div>
+                  <h3 class="font-fredoka font-bold text-pinkapp-text text-sm flex items-center gap-1.5">
+                    ${card.title} <span>${card.emoji}</span>
+                  </h3>
+                  <p class="text-xs text-pinkapp-muted font-medium mt-0.5">${card.desc}</p>
+                </div>
+              </div>
+              <span class="text-xs font-fredoka font-bold ${isUsedUp ? 'bg-gray-200 text-gray-500' : 'bg-pink-200 text-pinkapp-dark'} px-3 py-1 rounded-full shrink-0">
+                ${isUsedUp ? 'Used' : `Left ${remaining}`}
+              </span>
+            </div>
+            <div class="flex justify-between items-center pt-2 border-t border-pink-100/60 text-[11px] font-fredoka">
+              <span class="text-rose-500 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-clock"></i> Exp: ${card.expiry}
+              </span>
+              <span class="text-pinkapp-muted">Tap to redeem pass →</span>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function openCardModal(cardId, type) {
+      if (type === 'bday' && !isBirthdayUnlocked) {
+        alert("🔒 These birthday passes are currently locked and will unlock on September 9th!");
+        return;
+      }
+
+      playAudioTone(523.25, 'sine', 0.1);
+      currentCardObj = (type === 'ready' ? readyCards : bdayUnlockedCards).find(c => c.id === cardId);
+      currentGachaResult = null;
+      
+      if(currentCardObj.total - currentCardObj.used <= 0) {
+        alert("Todd, you have already used all available redemptions for this pass!");
+        return;
+      }
+
+      document.getElementById('modal-title').innerText = `${currentCardObj.title} ${currentCardObj.emoji}`;
+      document.getElementById('modal-desc').innerText = currentCardObj.desc;
+      document.getElementById('modal-expiry-tag').innerText = `Valid: ${currentCardObj.expiry}`;
+      document.getElementById('modal-icon').className = `fa-solid ${currentCardObj.icon}`;
+      document.getElementById('modal-icon-bg').className = `w-16 h-16 rounded-full flex items-center justify-center text-3xl mx-auto text-white shadow-lg ${currentCardObj.bgColor}`;
+      
+      const noteInput = document.getElementById('modal-user-note');
+      const reqBadge = document.getElementById('note-required-badge');
+      const errText = document.getElementById('note-error-msg');
+      
+      noteInput.value = '';
+      errText.classList.add('hidden');
+      noteInput.classList.remove('border-rose-500', 'ring-2', 'ring-rose-400');
+
+      if (currentCardObj.requireNote) {
+        reqBadge.classList.remove('hidden');
+        noteInput.placeholder = "Specify date, time, location, or activity details...";
+      } else {
+        reqBadge.classList.add('hidden');
+        noteInput.placeholder = "Specify date, time, preferred place, or wishes (Optional)...";
+      }
+
+      const modal = document.getElementById('app-modal');
+      const box = document.getElementById('modal-box');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        box.classList.remove('scale-95', 'opacity-0');
+        box.classList.add('scale-100', 'opacity-100');
+      }, 10);
+    }
+
+    function proceedToGachaAnimation() {
+      const noteInput = document.getElementById('modal-user-note');
+      const errText = document.getElementById('note-error-msg');
+      currentNoteUsed = noteInput.value.trim();
+
+      if (currentCardObj.requireNote && !currentNoteUsed) {
+        playAudioTone(200, 'sawtooth', 0.2);
+        errText.classList.remove('hidden');
+        noteInput.classList.add('border-rose-500', 'ring-2', 'ring-rose-400');
+        noteInput.focus();
+        return;
+      }
+
+      playAudioTone(659.25, 'triangle', 0.15);
+      currentCardObj.used += 1;
+
+      renderReadyCards();
+      if (isBirthdayUnlocked) renderBdayCards();
+      closeModal();
+
+      document.getElementById('gacha-anim-modal').classList.remove('hidden');
+
+      let slotIndex = 0;
+      const delays = [80, 80, 90, 100, 120, 150, 200, 280, 380, 500];
+      let step = 0;
+
+      function spinStep() {
+        if (step < delays.length) {
+          const sample = singlePassGachaPool[slotIndex % singlePassGachaPool.length];
+          document.getElementById('gacha-anim-desc').innerText = `🎰 Rolling Perk: [${sample.rarity}] ${sample.name}...`;
+          
+          playAudioTone(300 + (step * 40), 'square', 0.04);
+          slotIndex++;
+          
+          setTimeout(spinStep, delays[step]);
+          step++;
+        } else {
+          finishSinglePassGacha();
+        }
+      }
+
+      spinStep();
+    }
+
+    function finishSinglePassGacha() {
+      currentGachaResult = singlePassGachaPool[Math.floor(Math.random() * singlePassGachaPool.length)];
+
+      document.getElementById('gacha-anim-modal').classList.add('hidden');
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      playCelebrationFanfare();
+
+      showCouponTicketModal();
+    }
+
+    function showCouponTicketModal() {
+      const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      document.getElementById('ticket-title').innerText = `${currentCardObj.title} ${currentCardObj.emoji}`;
+      document.getElementById('ticket-desc').innerText = currentCardObj.desc;
+      document.getElementById('ticket-note-text').innerText = currentNoteUsed ? `"${currentNoteUsed}"` : "None (No special request attached)";
+      document.getElementById('ticket-icon').className = `fa-solid ${currentCardObj.icon}`;
+      document.getElementById('ticket-icon-bg').className = `w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-2xl text-white shadow-md ${currentCardObj.bgColor}`;
+      document.getElementById('ticket-date-stamp').innerText = `Issued: ${today}`;
+      document.getElementById('ticket-expiry-stamp').innerText = `Exp: ${currentCardObj.expiry}`;
+
+      const badge = document.getElementById('ticket-gacha-badge');
+      if(currentGachaResult) {
+        badge.className = `mb-3 p-2.5 rounded-2xl border text-xs font-semibold space-y-0.5 ${currentGachaResult.styleClass}`;
+        document.getElementById('ticket-gacha-rarity').innerText = `✨ GACHA PERK [${currentGachaResult.rarity}]`;
+        document.getElementById('ticket-gacha-card-name').innerText = currentGachaResult.name;
+        document.getElementById('ticket-gacha-desc').innerText = currentGachaResult.desc;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      document.getElementById('coupon-modal').classList.remove('hidden');
+    }
+
+    function closeCouponModal() {
+      document.getElementById('coupon-modal').classList.add('hidden');
+    }
+
+    function downloadCouponImage() {
+      playAudioTone(783.99, 'sine', 0.1);
+      const target = document.getElementById('ticket-capture-target');
+      html2canvas(target, { scale: 2, backgroundColor: null }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `Mission_Ticket_For_Me_${currentCardObj.id}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    }
+
+    function sendToWhatsApp() {
+      playAudioTone(880, 'sine', 0.1);
+      const phone = "66973082083";
+      
+      let gachaText = currentGachaResult 
+        ? `\n🎰 *Single-Pass Gacha Perk:* [${currentGachaResult.rarity}] ${currentGachaResult.name}\n💡 *Bonus:* ${currentGachaResult.desc}`
+        : '';
+
+      const text = `🎟️ *[OFFICIAL DUTY TICKET FOR YOU!]*\n\nHey! Here is your new assignment:\n📌 *Pass Item:* ${currentCardObj.title} ${currentCardObj.emoji}\n📝 *Todd's Request Note:* ${currentNoteUsed || 'None'}${gachaText}\n⏳ *Expiry:* ${currentCardObj.expiry}\n\nI'm sending this duty ticket directly to your phone so you can get to work for me! Get ready! 💕✨`;
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('app-modal');
+      const box = document.getElementById('modal-box');
+      box.classList.remove('scale-100', 'opacity-100');
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    }
+  </script>
+</body>
+</html>
