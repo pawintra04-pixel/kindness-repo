@@ -829,35 +829,16 @@
   </div>
 
   <!-- ============================================================
-       OPTIONAL FIREBASE SYNC
-       The app works immediately from localStorage even if these values are blank.
-       Add your Firebase config only if Todd and Admin should sync across devices.
+       BACKEND / DATA ARCHITECTURE (rebuilt)
+       Firestore is the source of truth, modeled as normalized
+       collections (coupons, usage, chat, memories + comments,
+       settings) instead of the old single-document array mirrors.
+       Access is gated by Firebase Anonymous Auth. The module below
+       is bundled by Vite from the npm `firebase` SDK and exposes the
+       same key-based facade (sGet/sSet/sDelete/seedSharedKey/...)
+       that the UI script already calls, so the visuals are untouched.
        ============================================================ -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-    import {
-      getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot
-    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyDKaawb7diEHvHMMRnJnR989IfK1mE37p0",
-      authDomain: "kindness-repo.firebaseapp.com",
-      projectId: "kindness-repo",
-      storageBucket: "kindness-repo.firebasestorage.app",
-      messagingSenderId: "456291938469",
-      appId: "1:456291938469:web:fca195868cc9d01ea0dd4c"
-    };
-
-    try {
-      const app = initializeApp(firebaseConfig);
-      window._db = getFirestore(app);
-      window._fs = { doc, getDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot };
-      window._firebaseReady = true;
-    } catch (e) {
-      console.error('Firebase init failed — check firebaseConfig values.', e);
-      window._firebaseReady = false;
-    }
-  </script>
+  <script type="module" src="/src/data-layer.js"></script>
 
   <script>
     // ============================================================
@@ -869,35 +850,16 @@
     // ============================================================
     function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-    // Never let Firebase/network problems freeze the app UI. Shared operations
-    // fail fast and the app falls back to its built-in defaults until Firestore
-    // becomes available again.
-    function promiseWithTimeout(promise, ms, fallbackValue) {
-      return Promise.race([
-        promise,
-        new Promise(resolve => setTimeout(() => resolve(fallbackValue), ms))
-      ]);
-    }
-
-    function firestoreAvailable() {
-      return !!(
-        window._firebaseReady &&
-        window._db &&
-        window._fs &&
-        window._fs.doc &&
-        window._fs.getDoc &&
-        window._fs.setDoc
-      );
-    }
-
-    // ============================================================
-    // FRESH PRODUCTION DATA LAYER
-    // ============================================================
-    // IMPORTANT:
-    // This build intentionally uses a brand-new namespace + Firestore collection.
-    // Old test data from previous builds is therefore ignored completely.
+    // ------------------------------------------------------------
+    // LOCAL READ CACHE
+    // The rebuilt data layer (src/data-layer.js) keeps Firestore as the
+    // source of truth and mirrors every collection into these localStorage
+    // keys, so each screen still reads instantly through the same facade.
+    // The sync engine, writes, and Anonymous-Auth gating now live in that
+    // module and are exposed on window (sGet/sSet/sDelete/seedSharedKey/
+    // pullRemoteKey/firestoreAvailable/start|stopRealtimeSync/...).
+    // ------------------------------------------------------------
     const STORAGE_PREFIX = 'kr_live_v1_';
-    const FIRESTORE_COLLECTION = 'kindness_repo_live_v1';
 
     function localRead(key) {
       try {
@@ -923,187 +885,6 @@
         localStorage.removeItem(STORAGE_PREFIX + key);
         localStorage.removeItem(STORAGE_PREFIX + '_meta_' + key);
       } catch (e) {}
-    }
-
-    function docRef(key) {
-      return window._fs.doc(window._db, FIRESTORE_COLLECTION, key);
-    }
-
-    function mergeById(a, b, limit) {
-      const map = new Map();
-      const add = (item) => {
-        if (!item || !item.id) return;
-        const old = map.get(item.id) || {};
-        map.set(item.id, { ...old, ...item });
-      };
-      (Array.isArray(a) ? a : []).forEach(add);
-      (Array.isArray(b) ? b : []).forEach(add);
-
-      let arr = Array.from(map.values());
-      arr.sort((x, y) => {
-        const tx = new Date(x.ts || x.timestamp || x.createdAt || 0).getTime();
-        const ty = new Date(y.ts || y.timestamp || y.createdAt || 0).getTime();
-        return tx - ty;
-      });
-      if (limit && arr.length > limit) arr = arr.slice(-limit);
-      return arr;
-    }
-
-    function mergeUsage(a, b) {
-      const map = new Map();
-      [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach(item => {
-        if (!item || !item.id) return;
-        const prev = map.get(item.id) || {};
-        const merged = { ...prev, ...item };
-
-        // Completion is sticky: an older device cannot make a completed mission pending again.
-        if (prev.status === 'completed' || item.status === 'completed') {
-          merged.status = 'completed';
-          merged.completedAt = item.completedAt || prev.completedAt || null;
-        }
-        map.set(item.id, merged);
-      });
-      return Array.from(map.values())
-        .sort((x, y) => new Date(x.timestamp || x.ts || 0) - new Date(y.timestamp || y.ts || 0))
-        .slice(-500);
-    }
-
-    function mergeComments(a, b) {
-      return mergeById(a, b, 500);
-    }
-
-    function mergeMemoryPost(a, b) {
-      if (!a) return b || null;
-      if (!b) return a || null;
-      const merged = { ...a, ...b };
-      merged.comments = mergeComments(a.comments, b.comments);
-      return merged;
-    }
-
-    function mergeSharedValue(key, localValue, remoteValue) {
-      if (key === 'chat:messages') return mergeById(localValue, remoteValue, 500);
-      if (key === 'usage:log') return mergeUsage(localValue, remoteValue);
-      if (key === 'safezone:index') return mergeById(localValue, remoteValue, 1000);
-      if (key.startsWith('safezone:post:')) return mergeMemoryPost(localValue, remoteValue);
-      return remoteValue;
-    }
-
-    function isMergeKey(key) {
-      return (
-        key === 'chat:messages' ||
-        key === 'usage:log' ||
-        key === 'safezone:index' ||
-        key.startsWith('safezone:post:')
-      );
-    }
-
-    async function getRemoteRecord(key) {
-      if (!firestoreAvailable()) return null;
-      try {
-        const snap = await promiseWithTimeout(window._fs.getDoc(docRef(key)), 2500, null);
-        if (!snap || !snap.exists()) return null;
-        return snap.data() || null;
-      } catch (e) {
-        console.warn('Remote read failed:', key, e);
-        return null;
-      }
-    }
-
-    async function writeRemoteRecord(key, value) {
-      if (!firestoreAvailable()) return false;
-      try {
-        const write = window._fs.setDoc(docRef(key), {
-          value,
-          updatedAt: Date.now()
-        });
-        const result = await promiseWithTimeout(write.then(() => true).catch(() => false), 3000, false);
-        return !!result;
-      } catch (e) {
-        console.warn('Remote write failed:', key, e);
-        return false;
-      }
-    }
-
-    async function sGet(key, shared) {
-      if (shared === undefined) shared = true;
-      // Local cache makes every screen instant.
-      return localRead(key);
-    }
-
-    async function sSet(key, value, shared) {
-      if (shared === undefined) shared = true;
-
-      // Personal identity/read-receipt data stays only on this browser.
-      if (!shared) return localWrite(key, value);
-
-      // For append/history data, first merge with the newest cloud copy.
-      if (firestoreAvailable() && isMergeKey(key)) {
-        const remote = await getRemoteRecord(key);
-        if (remote && remote.value !== undefined) {
-          value = mergeSharedValue(key, remote.value, value);
-        }
-      }
-
-      // Update the current screen immediately.
-      localWrite(key, value);
-
-      // Shared actions are committed to Firebase so every device gets the same result.
-      if (firestoreAvailable()) {
-        const ok = await writeRemoteRecord(key, value);
-        if (!ok) {
-          // Do not lose the user's action. Background sync retries later.
-          console.warn('Saved locally; cloud retry will happen:', key);
-        }
-      }
-      return true;
-    }
-
-    async function sDelete(key, shared) {
-      if (shared === undefined) shared = true;
-      localDelete(key);
-
-      if (shared && firestoreAvailable()) {
-        try {
-          await promiseWithTimeout(window._fs.deleteDoc(docRef(key)), 2500, null);
-        } catch (e) {}
-      }
-    }
-
-    async function pullRemoteKey(key) {
-      if (!firestoreAvailable()) return false;
-      const remote = await getRemoteRecord(key);
-      if (!remote || remote.value === undefined) return false;
-
-      const current = localRead(key);
-      const value = isMergeKey(key)
-        ? mergeSharedValue(key, current, remote.value)
-        : remote.value;
-
-      localWrite(key, value);
-
-      // If our cache contained an item the cloud did not, repair cloud too.
-      if (isMergeKey(key)) {
-        const a = JSON.stringify(value);
-        const b = JSON.stringify(remote.value);
-        if (a !== b) writeRemoteRecord(key, value);
-      }
-      return true;
-    }
-
-    async function seedSharedKey(key, fallback) {
-      if (!firestoreAvailable()) {
-        if (localRead(key) === null) localWrite(key, fallback);
-        return;
-      }
-
-      const remote = await getRemoteRecord(key);
-      if (remote && remote.value !== undefined) {
-        localWrite(key, remote.value);
-        return;
-      }
-
-      localWrite(key, fallback);
-      await writeRemoteRecord(key, fallback);
     }
 
     function refreshVisibleSharedUI(key) {
@@ -1140,125 +921,6 @@
         if (todd && !todd.classList.contains('hidden')) renderSafeZoneInto('section-safezone-todd');
         if (admin && !admin.classList.contains('hidden')) renderSafeZoneInto('admin-section-safezone');
       }
-    }
-
-    const liveUnsubs = [];
-    const watchedMemoryPosts = new Set();
-
-    function stopRealtimeSync() {
-      while (liveUnsubs.length) {
-        try { liveUnsubs.pop()(); } catch (e) {}
-      }
-      watchedMemoryPosts.clear();
-    }
-
-    function watchMemoryPost(postId) {
-      if (!firestoreAvailable() || !postId || watchedMemoryPosts.has(postId)) return;
-      watchedMemoryPosts.add(postId);
-
-      const unsub = window._fs.onSnapshot(docRef('safezone:post:' + postId), snap => {
-        if (!snap.exists()) return;
-        const data = snap.data();
-        if (!data || data.value === undefined) return;
-
-        const key = 'safezone:post:' + postId;
-        const merged = mergeMemoryPost(localRead(key), data.value);
-        localWrite(key, merged);
-        refreshVisibleSharedUI(key);
-      }, err => console.warn('Memory realtime listener:', err));
-
-      liveUnsubs.push(unsub);
-    }
-
-    function watchSharedKey(key) {
-      if (!firestoreAvailable()) return;
-
-      const unsub = window._fs.onSnapshot(docRef(key), snap => {
-        if (!snap.exists()) return;
-        const data = snap.data();
-        if (!data || data.value === undefined) return;
-
-        const current = localRead(key);
-        const value = isMergeKey(key)
-          ? mergeSharedValue(key, current, data.value)
-          : data.value;
-
-        localWrite(key, value);
-
-        if (key === 'safezone:index' && Array.isArray(value)) {
-          value.forEach(item => item && item.id && watchMemoryPost(item.id));
-        }
-
-        refreshVisibleSharedUI(key);
-      }, err => console.warn('Realtime listener:', key, err));
-
-      liveUnsubs.push(unsub);
-    }
-
-    function startRealtimeSync() {
-      if (!firestoreAvailable() || !window._fs.onSnapshot) return;
-      stopRealtimeSync();
-
-      [
-        'coupons:ready',
-        'coupons:bday',
-        'usage:log',
-        'chat:messages',
-        'safezone:index',
-        'settings:countdownTarget',
-        'settings:countdownLabel',
-        'settings:countdownComplete',
-        'settings:specialDayName',
-        'settings:specialMessage',
-        'settings:welcomeTitle',
-        'settings:welcomeSubtitle'
-      ].forEach(watchSharedKey);
-
-      const idx = localRead('safezone:index') || [];
-      idx.forEach(item => item && item.id && watchMemoryPost(item.id));
-    }
-
-    let backgroundSyncBusy = false;
-    async function backgroundSyncSharedData() {
-      if (backgroundSyncBusy || !firestoreAvailable()) return;
-      backgroundSyncBusy = true;
-      try {
-        const keys = [
-          'coupons:ready',
-          'coupons:bday',
-          'usage:log',
-          'chat:messages',
-          'safezone:index',
-          'settings:countdownTarget',
-          'settings:countdownLabel',
-          'settings:countdownComplete',
-          'settings:specialDayName',
-          'settings:specialMessage',
-          'settings:welcomeTitle',
-          'settings:welcomeSubtitle'
-        ];
-
-        await Promise.all(keys.map(pullRemoteKey));
-
-        const index = localRead('safezone:index') || [];
-        await Promise.all(index.slice(-100).map(item =>
-          item && item.id ? pullRemoteKey('safezone:post:' + item.id) : Promise.resolve(false)
-        ));
-
-        // Render the latest cache after fallback polling.
-        ['chat:messages', 'usage:log', 'coupons:ready', 'coupons:bday', 'safezone:index']
-          .forEach(refreshVisibleSharedUI);
-      } finally {
-        backgroundSyncBusy = false;
-      }
-    }
-
-    function startBackgroundSync() {
-      // Realtime listeners are primary. Polling is only a safety net.
-      startRealtimeSync();
-      setTimeout(backgroundSyncSharedData, 700);
-      if (window._krSyncInterval) clearInterval(window._krSyncInterval);
-      window._krSyncInterval = setInterval(backgroundSyncSharedData, 10000);
     }
 
     // Custom confirm/alert dialogs — sandboxed preview environments often block
@@ -1373,18 +1035,12 @@
         : card
       );
 
-      localWrite('coupons:bday', cards);
       localWrite(migrationKey, true);
 
-      // Mirror the corrected deck in the background if Firebase is configured.
-      if (firestoreAvailable()) {
-        Promise.resolve().then(() =>
-          window._fs.setDoc(
-            window._fs.doc(window._db, 'krepo', 'coupons:bday'),
-            { value: cards, updatedAt: Date.now() }
-          )
-        ).catch(() => {});
-      }
+      // Persist the corrected deck through the rebuilt data layer, which
+      // writes each coupon as its own normalized document in Firestore.
+      try { await sSet('coupons:bday', cards); }
+      catch (e) { localWrite('coupons:bday', cards); }
     }
 
     // ============================================================

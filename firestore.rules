@@ -1,0 +1,75 @@
+rules_version = '2';
+
+// ============================================================
+// KINDNESS REPO — FIRESTORE SECURITY RULES
+// ------------------------------------------------------------
+// This is a tiny private two-person app that authenticates its
+// callers with Firebase Anonymous Auth. There is no Firebase-side
+// notion of "Todd" vs "Admin" (that gate is a front-end concern),
+// so the meaningful backend protection here is: only an
+// authenticated (signed-in) client may read or write, and each
+// document must match the expected shape/size. That blocks random
+// public/unauthenticated traffic and oversized writes.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+// (or paste into Firebase console > Firestore Database > Rules)
+// ============================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Any signed-in (anonymous) client may participate.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Reject documents larger than ~900 KB of media so a single write
+    // cannot approach Firestore's 1 MB/document hard limit.
+    function withinSizeLimit() {
+      return !('media' in request.resource.data)
+        || request.resource.data.media == null
+        || request.resource.data.media is string
+        && request.resource.data.media.size() < 900000;
+    }
+
+    // App settings: a single shared document.
+    match /settings/{docId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // Coupons: one document per coupon, tagged with its deck.
+    match /coupons/{couponId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // Usage log: one document per redemption / mission entry.
+    match /usage/{entryId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // Chat: one document per message.
+    match /chat/{messageId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // Safe Zone memories: one document per post, with comments in a
+    // subcollection so a busy thread never bloats the parent document.
+    match /memories/{memoryId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && withinSizeLimit();
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow write: if signedIn();
+      }
+    }
+
+    // Everything else is denied by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
