@@ -1976,23 +1976,15 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
     async function confirmRedeem() {
       document.getElementById('confirm-use-modal').classList.add('hidden');
       playAudioTone(659.25, 'triangle', 0.15);
-      currentCardObj.used += 1;
 
-      const list = currentCardType === 'ready' ? readyCards : bdayUnlockedCards;
-      const idx = list.findIndex(c => c.id === currentCardObj.id);
-      if (idx > -1) list[idx] = currentCardObj;
-      await sSet(currentCardType === 'ready' ? 'coupons:ready' : 'coupons:bday', list, true);
-
-      renderReadyCards();
-      if (isBirthdayUnlocked) renderBdayCards();
-      closeModal();
-
+      // Do not change the coupon locally before Firestore accepts it.
+      // The actual coupon increment + usage entry are committed together in
+      // one Firestore transaction by redeemCouponAtomic().
       if (currentCardObj.gachaAllowed && currentGachaChoice) {
         runGachaSpin();
       } else {
         currentGachaResult = null;
         await recordUsage();
-        showCouponTicketModal();
       }
     }
 
@@ -2022,15 +2014,10 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       playCelebrationFanfare();
       await recordUsage();
-      showCouponTicketModal();
     }
 
     async function recordUsage() {
-      const log = (await sGet('usage:log', true)) || [];
       const entry = {
-        id: 'u_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-        cardId: currentCardObj.id,
-        cardType: currentCardType,
         cardTitle: `${currentCardObj.title} ${currentCardObj.emoji}`,
         note: currentNoteUsed || '',
         gachaUsed: !!currentGachaResult,
@@ -2042,24 +2029,38 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
         status: 'pending',
         completedAt: null
       };
-      log.push(entry);
-      if (log.length > 300) log.splice(0, log.length - 300);
-      let ok = await sSet('usage:log', log, true);
-      if (!ok) {
-        // one more explicit attempt before giving up — this record is important
-        await wait(500);
-        ok = await sSet('usage:log', log, true);
+
+      if (typeof window.redeemCouponAtomic !== 'function') {
+        await customAlert("The redemption system isn't ready yet. Please refresh and try again.");
+        return false;
       }
-      if (!ok) {
-        await customAlert("This redemption didn't save correctly — please check your connection and try tapping the coupon again, or let the admin know.");
-      } else {
-        // verify it actually stuck (protects against a storage backend that
-        // reports success but silently drops the write)
-        const verify = (await sGet('usage:log', true)) || [];
-        if (!verify.some(e => e.id === entry.id)) {
-          await sSet('usage:log', log, true);
+
+      const result = await window.redeemCouponAtomic(currentCardObj.id, currentCardType, entry);
+      if (!result.ok) {
+        if (result.reason === 'coupon-exhausted') {
+          await customAlert('This coupon has already been fully used. The latest status has been synced from the other device.');
+        } else if (result.reason === 'offline') {
+          await customAlert('You need an internet connection to redeem a coupon safely. Please reconnect and try again.');
+        } else {
+          await customAlert("This redemption didn't save correctly — please check your connection and try again, or let the admin know.");
         }
+        await loadCoupons();
+        renderReadyCards();
+        if (isBirthdayUnlocked) renderBdayCards();
+        return false;
       }
+
+      // Update this screen immediately; the Firestore onSnapshot listener will
+      // shortly replace it with the same authoritative value on every device.
+      currentCardObj.used = result.nextUsed;
+      const list = currentCardType === 'ready' ? readyCards : bdayUnlockedCards;
+      const idx = list.findIndex(c => c.id === currentCardObj.id);
+      if (idx > -1) list[idx] = currentCardObj;
+      renderReadyCards();
+      if (isBirthdayUnlocked) renderBdayCards();
+      closeModal();
+      showCouponTicketModal();
+      return true;
 
   }
 

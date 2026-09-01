@@ -30,6 +30,7 @@ import {
   setDoc,
   deleteDoc,
   writeBatch,
+  runTransaction,
 } from "firebase/firestore"
 
 // ---- bridges to the classic inline script (localStorage cache + UI) ----
@@ -372,6 +373,55 @@ async function sSet(key, value, shared) {
   }
 }
 
+
+// Atomically redeem one coupon and create exactly one usage entry.
+// Firestore retries the transaction if another device changes the coupon
+// between our read and write, so the final remaining use cannot be spent twice.
+async function redeemCouponAtomic(cardId, cardType, usageData) {
+  await ensureListeners()
+  if (!firestoreReady || !auth.currentUser) {
+    return { ok: false, reason: "offline" }
+  }
+
+  const couponRef = doc(db, "coupons", cardId)
+  // Generate the usage document reference before entering the transaction so
+  // retries always target the same document instead of creating duplicates.
+  const usageRef = doc(collection(db, "usage"))
+
+  try {
+    const result = await runTransaction(db, async (tx) => {
+      const couponSnap = await tx.get(couponRef)
+      if (!couponSnap.exists()) throw new Error("coupon-not-found")
+
+      const coupon = couponSnap.data()
+      const expectedDeck = cardType === "bday" ? "bday" : "ready"
+      if (coupon.deck !== expectedDeck) throw new Error("coupon-deck-mismatch")
+
+      const used = Number(coupon.used || 0)
+      const total = Number(coupon.total || 0)
+      if (total <= 0 || used >= total) throw new Error("coupon-exhausted")
+
+      const nextUsed = used + 1
+      const entry = {
+        ...usageData,
+        id: usageRef.id,
+        cardId,
+        cardType: expectedDeck,
+      }
+
+      tx.update(couponRef, { used: nextUsed })
+      tx.set(usageRef, entry)
+      return { nextUsed, entryId: usageRef.id }
+    })
+
+    return { ok: true, ...result }
+  } catch (e) {
+    const reason = e && e.message ? e.message : "transaction-failed"
+    console.warn("[kindness-repo] atomic redemption failed:", reason, e)
+    return { ok: false, reason }
+  }
+}
+
 async function deleteMemoryPost(id) {
   // Firestore does not cascade-delete subcollections: deleting the parent
   // "memories/{id}" doc alone would leave every comment doc under
@@ -460,6 +510,7 @@ Object.assign(window, {
   startRealtimeSync,
   stopRealtimeSync,
   startBackgroundSync,
+  redeemCouponAtomic,
 })
 
 // Begin syncing as soon as anonymous auth is ready.

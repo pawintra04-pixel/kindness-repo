@@ -19,10 +19,10 @@ rules_version = '2';
 //   memories/{memoryId}                -> one Safe Zone post per doc
 //   memories/{memoryId}/comments/{id}  -> comments as a subcollection
 //
-// The transaction-based coupon redemption is an atomic Firestore
-// writeBatch that touches ONLY the coupons and usage collections, both
-// allowed below, so a redemption (remove/mark coupon + append usage
-// entry) commits as a single all-or-nothing unit.
+// Coupon redemption uses a Firestore transaction that reads the current
+// coupon document, verifies a use is still available, then atomically
+// increments its used count and creates one usage document. The transaction
+// touches ONLY the coupons and usage collections allowed below.
 //
 // Deploy with:  firebase deploy --only firestore:rules
 // (or paste into Firebase console > Firestore Database > Rules)
@@ -52,7 +52,7 @@ service cloud.firestore {
     }
 
     // Coupons: one document per coupon, tagged with its deck
-    // ('ready' | 'bday'). Part of the atomic redemption batch.
+    // ('ready' | 'bday'). Updated inside the atomic redemption transaction.
     match /coupons/{couponId} {
       allow read: if signedIn();
       allow create, update: if signedIn() && withinSizeLimit();
@@ -60,7 +60,7 @@ service cloud.firestore {
     }
 
     // Usage log: one document per redemption / mission entry.
-    // The other half of the atomic redemption batch.
+    // Created inside the same atomic redemption transaction.
     match /usage/{entryId} {
       allow read: if signedIn();
       allow create, update: if signedIn() && withinSizeLimit();
