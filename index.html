@@ -840,12 +840,12 @@
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
     const firebaseConfig = {
-      apiKey: "PASTE_YOUR_API_KEY_HERE",
-      authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
-      projectId: "PASTE_YOUR_PROJECT_ID_HERE",
-      storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
-      messagingSenderId: "PASTE_YOUR_SENDER_ID_HERE",
-      appId: "PASTE_YOUR_APP_ID_HERE"
+      apiKey: "AIzaSyDKaawb7diEHvHMMRnJnR989IfK1mE37p0",
+      authDomain: "kindness-repo.firebaseapp.com",
+      projectId: "kindness-repo",
+      storageBucket: "kindness-repo.firebasestorage.app",
+      messagingSenderId: "456291938469",
+      appId: "1:456291938469:web:fca195868cc9d01ea0dd4c"
     };
 
     try {
@@ -883,6 +883,156 @@
       return !!(window._firebaseReady && window._db && window._fs && window._fs.doc);
     }
 
+
+    // ============================================================
+    // SHARED DATA SAFETY LAYER
+    // Prevent stale cloud data from erasing newer local data.
+    // Append-only data is merged by ID; editable data uses timestamps.
+    // ============================================================
+    function localMetaTime(key) {
+      try { return Number(localStorage.getItem('kr_meta_' + key) || 0); }
+      catch (e) { return 0; }
+    }
+
+    function setLocalMetaTime(key, ts) {
+      try { localStorage.setItem('kr_meta_' + key, String(Number(ts) || Date.now())); }
+      catch (e) {}
+    }
+
+    function mergeById(a, b, maxItems) {
+      const map = new Map();
+      [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach(item => {
+        if (!item || !item.id) return;
+        map.set(item.id, { ...(map.get(item.id) || {}), ...item });
+      });
+      let items = Array.from(map.values());
+      items.sort((x, y) => new Date(x.ts || x.timestamp || 0) - new Date(y.ts || y.timestamp || 0));
+      if (maxItems && items.length > maxItems) items = items.slice(-maxItems);
+      return items;
+    }
+
+    function mergeUsageLogs(a, b) {
+      const merged = mergeById(a, b, 500);
+      return merged.map(item => item);
+    }
+
+    function mergeMemoryIndexes(a, b) {
+      return mergeById(a, b, 1000);
+    }
+
+    function mergeComments(a, b) {
+      return mergeById(a, b, 500);
+    }
+
+    function mergeMemoryPost(localPost, remotePost) {
+      if (!localPost) return remotePost || null;
+      if (!remotePost) return localPost || null;
+      const merged = { ...remotePost, ...localPost };
+      merged.comments = mergeComments(remotePost.comments, localPost.comments);
+      return merged;
+    }
+
+    function getSafeMemoryIndex() {
+      const main = localRead('safezone:index') || [];
+      const backup = localRead('safezone:index:backup') || [];
+      const merged = mergeMemoryIndexes(main, backup);
+      localWrite('safezone:index', merged);
+      localWrite('safezone:index:backup', merged);
+      return merged;
+    }
+
+    function saveSafeMemoryIndex(index) {
+      const merged = mergeMemoryIndexes(getSafeMemoryIndex(), index);
+      localWrite('safezone:index', merged);
+      localWrite('safezone:index:backup', merged);
+      return merged;
+    }
+
+    function mergeSharedValue(key, localValue, remoteValue) {
+      if (key === 'chat:messages') return mergeById(localValue, remoteValue, 300);
+      if (key === 'usage:log') return mergeUsageLogs(localValue, remoteValue);
+      if (key === 'safezone:index') return mergeMemoryIndexes(localValue, remoteValue);
+      if (key.startsWith('safezone:post:')) return mergeMemoryPost(localValue, remoteValue);
+      return localValue;
+    }
+
+    async function getRemoteRecord(key) {
+      if (!firestoreAvailable()) return null;
+      try {
+        const snap = await promiseWithTimeout(
+          window._fs.getDoc(window._fs.doc(window._db, 'krepo', key)),
+          1800,
+          null
+        );
+        if (!snap || !snap.exists()) return null;
+        return snap.data() || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function writeRemoteRecord(key, value, updatedAt) {
+      if (!firestoreAvailable()) return false;
+      try {
+        await window._fs.setDoc(
+          window._fs.doc(window._db, 'krepo', key),
+          { value, updatedAt: Number(updatedAt) || Date.now() }
+        );
+        return true;
+      } catch (e) {
+        console.warn('Cloud write skipped:', key, e);
+        return false;
+      }
+    }
+
+    async function syncOneSharedKey(key) {
+      if (!firestoreAvailable()) return false;
+
+      const localValue = key === 'safezone:index' ? getSafeMemoryIndex() : localRead(key);
+      const localTs = localMetaTime(key);
+      const remote = await getRemoteRecord(key);
+
+      // No cloud copy yet: seed it from this device.
+      if (!remote || remote.value === undefined) {
+        if (localValue !== null) {
+          const ts = localTs || Date.now();
+          setLocalMetaTime(key, ts);
+          await writeRemoteRecord(key, localValue, ts);
+          return true;
+        }
+        return false;
+      }
+
+      const remoteValue = remote.value;
+      const remoteTs = Number(remote.updatedAt || 0);
+
+      // Append-only/shared history data: ALWAYS merge, never replace.
+      if (
+        key === 'chat:messages' ||
+        key === 'usage:log' ||
+        key === 'safezone:index' ||
+        key.startsWith('safezone:post:')
+      ) {
+        const merged = mergeSharedValue(key, localValue, remoteValue);
+        if (key === 'safezone:index') saveSafeMemoryIndex(merged);
+        else localWrite(key, merged);
+
+        const ts = Math.max(Date.now(), localTs, remoteTs);
+        setLocalMetaTime(key, ts);
+        await writeRemoteRecord(key, merged, ts);
+        return true;
+      }
+
+      // Editable values (coupons/settings): newest timestamp wins.
+      if (!localTs || remoteTs >= localTs) {
+        localWrite(key, remoteValue);
+        setLocalMetaTime(key, remoteTs || Date.now());
+      } else if (localValue !== null) {
+        await writeRemoteRecord(key, localValue, localTs);
+      }
+      return true;
+    }
+
     // LOCAL-FIRST STORAGE
     // Every action reads/writes localStorage immediately, so the UI never waits
     // for the network. If Firebase is configured, shared data is mirrored in the
@@ -897,45 +1047,13 @@
     function localWrite(key, value) {
       try {
         localStorage.setItem('kr_' + key, JSON.stringify(value));
+        localStorage.setItem('kr_meta_' + key, String(Date.now()));
         return true;
       } catch (e) { return false; }
     }
 
     function localDelete(key) {
       try { localStorage.removeItem('kr_' + key); } catch (e) {}
-    }
-
-    // SAFE ZONE memories are append-only: once saved, remote sync is never
-    // allowed to erase a local memory. Keep a second local index as a safety copy.
-    function mergeMemoryIndexes(a, b) {
-      const map = new Map();
-      [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach(item => {
-        if (item && item.id) {
-          const prev = map.get(item.id) || {};
-          map.set(item.id, { ...prev, ...item });
-        }
-      });
-      return Array.from(map.values()).sort((x, y) =>
-        new Date(x.ts || 0) - new Date(y.ts || 0)
-      );
-    }
-
-    function getSafeMemoryIndex() {
-      const main = localRead('safezone:index') || [];
-      const backup = localRead('safezone:index:backup') || [];
-      const merged = mergeMemoryIndexes(main, backup);
-      if (merged.length !== main.length || merged.length !== backup.length) {
-        localWrite('safezone:index', merged);
-        localWrite('safezone:index:backup', merged);
-      }
-      return merged;
-    }
-
-    function saveSafeMemoryIndex(index) {
-      const merged = mergeMemoryIndexes(getSafeMemoryIndex(), index);
-      localWrite('safezone:index', merged);
-      localWrite('safezone:index:backup', merged);
-      return merged;
     }
 
     async function sGet(key, shared) {
@@ -946,19 +1064,45 @@
 
     async function sSet(key, value, shared) {
       if (shared === undefined) shared = true;
+
+      // Protect append-only shared data locally before mirroring.
+      if (key === 'chat:messages') {
+        value = mergeById(localRead(key) || [], value, 300);
+      } else if (key === 'usage:log') {
+        value = mergeUsageLogs(localRead(key) || [], value);
+      } else if (key === 'safezone:index') {
+        value = saveSafeMemoryIndex(value);
+      } else if (key.startsWith('safezone:post:')) {
+        value = mergeMemoryPost(localRead(key), value);
+      }
+
       const ok = localWrite(key, value);
 
       // Personal/device-only data stays local.
       if (!shared) return ok;
 
-      // Shared data mirrors to Firebase in the background. No await = no lag.
+      const ts = Date.now();
+      setLocalMetaTime(key, ts);
+
+      // Never make the UI wait for Firebase.
       if (firestoreAvailable()) {
-        Promise.resolve().then(() =>
-          window._fs.setDoc(
-            window._fs.doc(window._db, 'krepo', key),
-            { value: value, updatedAt: Date.now() }
-          )
-        ).catch(e => console.warn('Background sync skipped:', key, e));
+        Promise.resolve().then(async () => {
+          // History / chat / memories must merge with cloud before write.
+          if (
+            key === 'chat:messages' ||
+            key === 'usage:log' ||
+            key === 'safezone:index' ||
+            key.startsWith('safezone:post:')
+          ) {
+            const remote = await getRemoteRecord(key);
+            if (remote && remote.value !== undefined) {
+              value = mergeSharedValue(key, value, remote.value);
+              if (key === 'safezone:index') saveSafeMemoryIndex(value);
+              else localWrite(key, value);
+            }
+          }
+          await writeRemoteRecord(key, value, ts);
+        }).catch(e => console.warn('Background sync skipped:', key, e));
       }
       return ok;
     }
@@ -976,21 +1120,54 @@
     }
 
     async function pullRemoteKey(key) {
-      if (!firestoreAvailable()) return false;
-      try {
-        const result = await promiseWithTimeout(
-          window._fs.getDoc(window._fs.doc(window._db, 'krepo', key)),
-          1200,
-          null
-        );
-        if (!result || !result.exists()) return false;
-        const data = result.data();
-        if (!data || data.value === undefined) return false;
-        localWrite(key, data.value);
-        return true;
-      } catch (e) {
-        return false;
+      return syncOneSharedKey(key);
+    }
+
+    // One-time migration: the first browser that opens this fixed build seeds
+    // its current working data into the cloud, while preserving any cloud-only
+    // chat/history/memories through merge.
+    let cloudBootstrapChecked = false;
+    async function ensureCloudBootstrap() {
+      if (cloudBootstrapChecked || !firestoreAvailable()) return;
+      cloudBootstrapChecked = true;
+
+      const marker = await getRemoteRecord('_meta:sync-safe-v3');
+      if (marker && marker.ready === true) return;
+
+      const editableKeys = [
+        'coupons:ready', 'coupons:bday',
+        'settings:countdownTarget', 'settings:countdownLabel',
+        'settings:countdownComplete', 'settings:specialDayName',
+        'settings:specialMessage', 'settings:welcomeTitle', 'settings:welcomeSubtitle'
+      ];
+
+      // Seed current known-good editable state.
+      for (const key of editableKeys) {
+        const value = localRead(key);
+        if (value !== null) {
+          const ts = Date.now();
+          setLocalMetaTime(key, ts);
+          await writeRemoteRecord(key, value, ts);
+        }
       }
+
+      // Merge append-only data.
+      await syncOneSharedKey('chat:messages');
+      await syncOneSharedKey('usage:log');
+      await syncOneSharedKey('safezone:index');
+
+      // Sync every Memory detail that exists on this browser.
+      const index = getSafeMemoryIndex();
+      for (const item of index) {
+        if (item && item.id) await syncOneSharedKey('safezone:post:' + item.id);
+      }
+
+      try {
+        await window._fs.setDoc(
+          window._fs.doc(window._db, 'krepo', '_meta:sync-safe-v3'),
+          { ready: true, updatedAt: Date.now() }
+        );
+      } catch (e) {}
     }
 
     let backgroundSyncBusy = false;
@@ -998,57 +1175,23 @@
       if (backgroundSyncBusy || !firestoreAvailable()) return;
       backgroundSyncBusy = true;
       try {
-        // Normal shared data can refresh from remote.
+        await ensureCloudBootstrap();
+
+        // Keep the list explicit. Append-only keys are merged by syncOneSharedKey;
+        // editable keys use newest-write-wins timestamps.
         const keys = [
           'coupons:ready', 'coupons:bday', 'usage:log', 'chat:messages',
           'settings:countdownTarget', 'settings:countdownLabel',
           'settings:countdownComplete', 'settings:specialDayName',
           'settings:specialMessage', 'settings:welcomeTitle', 'settings:welcomeSubtitle'
         ];
-        await Promise.all(keys.map(pullRemoteKey));
+        await Promise.all(keys.map(syncOneSharedKey));
 
-        // SAFE ZONE IS APPEND-ONLY.
-        // Merge remote + local indexes instead of replacing local memories.
-        let localIndex = getSafeMemoryIndex();
-        try {
-          const snap = await promiseWithTimeout(
-            window._fs.getDoc(window._fs.doc(window._db, 'krepo', 'safezone:index')),
-            1200,
-            null
-          );
-          if (snap && snap.exists()) {
-            const data = snap.data();
-            const remoteIndex = data && Array.isArray(data.value) ? data.value : [];
-            localIndex = saveSafeMemoryIndex(mergeMemoryIndexes(localIndex, remoteIndex));
-          }
-        } catch (e) {}
+        await syncOneSharedKey('safezone:index');
+        const index = getSafeMemoryIndex();
+        await Promise.all(index.slice(-50).map(item => syncOneSharedKey('safezone:post:' + item.id)));
 
-        // Pull a memory detail only if this browser does not already have it.
-        // A stale/empty remote record can therefore never overwrite a local post.
-        await Promise.all(localIndex.slice(-50).map(async item => {
-          const key = 'safezone:post:' + item.id;
-          if (localRead(key)) return;
-          try {
-            const snap = await promiseWithTimeout(
-              window._fs.getDoc(window._fs.doc(window._db, 'krepo', key)),
-              1200,
-              null
-            );
-            if (snap && snap.exists()) {
-              const data = snap.data();
-              if (data && data.value !== undefined) localWrite(key, data.value);
-            }
-          } catch (e) {}
-        }));
-
-        // Push the merged index back so both devices converge without deletions.
-        try {
-          window._fs.setDoc(
-            window._fs.doc(window._db, 'krepo', 'safezone:index'),
-            { value: localIndex, updatedAt: Date.now() }
-          ).catch(() => {});
-        } catch (e) {}
-
+        // Refresh only what is currently visible. These are local reads now.
         if (currentUser) {
           refreshChatBadge();
           if (currentUser.role === 'admin' && typeof adminActiveTab !== 'undefined' && adminActiveTab === 'usage') refreshAdminUsage();
@@ -1065,10 +1208,11 @@
     }
 
     function startBackgroundSync() {
-      // First attempt shortly after the UI appears, then every 8 seconds.
+      // First attempt shortly after the UI appears, then every 4 seconds.
+      // The UI still reads locally, so this does not make the app feel slower.
       setTimeout(backgroundSyncSharedData, 300);
       if (window._krSyncInterval) clearInterval(window._krSyncInterval);
-      window._krSyncInterval = setInterval(backgroundSyncSharedData, 8000);
+      window._krSyncInterval = setInterval(backgroundSyncSharedData, 4000);
     }
 
     // Custom confirm/alert dialogs — sandboxed preview environments often block
@@ -2753,10 +2897,78 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
     let szCompressedPhotoBase64 = null;
 
     async function loadSafeZonePosts() {
+      // Memory is append-only: merge cloud + local index, never replace it.
+      if (firestoreAvailable()) await syncOneSharedKey('safezone:index');
       const index = getSafeMemoryIndex();
       const sorted = [...index].sort((a, b) => new Date(b.ts) - new Date(a.ts));
-      const details = await Promise.all(sorted.map(item => sGet('safezone:post:' + item.id, true)));
+
+      if (firestoreAvailable()) {
+        await Promise.all(sorted.slice(0, 50).map(item => syncOneSharedKey('safezone:post:' + item.id)));
+      }
+      const details = sorted.map(item => localRead('safezone:post:' + item.id));
       return sorted.map((item, i) => ({ ...item, ...(details[i] || {}) }));
+    }
+
+    let activeMemoryCommentPostId = null;
+
+    function openMemoryCommentComposer(postId) {
+      activeMemoryCommentPostId = postId;
+      const modal = document.getElementById('memory-comment-modal');
+      const input = document.getElementById('memory-comment-modal-input');
+      input.value = '';
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+
+      // On mobile, focus after the full-screen panel is visible.
+      setTimeout(() => {
+        try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+      }, 120);
+    }
+
+    function closeMemoryCommentComposer() {
+      const modal = document.getElementById('memory-comment-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.body.style.overflow = '';
+      activeMemoryCommentPostId = null;
+    }
+
+    async function saveMemoryComment(postId, commentText) {
+      if (!currentUser || !postId || !commentText.trim()) return false;
+
+      const postKey = 'safezone:post:' + postId;
+      const post = (await sGet(postKey, true)) || {};
+      const comments = Array.isArray(post.comments) ? [...post.comments] : [];
+
+      comments.push({
+        id: 'comment_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        text: commentText.trim(),
+        by: currentUser.role,
+        byName: currentUser.role === 'admin' ? 'Admin' : 'Todd',
+        ts: new Date().toISOString()
+      });
+
+      await sSet(postKey, { ...post, comments }, true);
+      return true;
+    }
+
+    async function submitMemoryCommentComposer() {
+      const input = document.getElementById('memory-comment-modal-input');
+      const commentText = input.value.trim();
+      if (!commentText || !activeMemoryCommentPostId) return;
+
+      const postId = activeMemoryCommentPostId;
+      input.disabled = true;
+      const ok = await saveMemoryComment(postId, commentText);
+      input.disabled = false;
+
+      if (ok) {
+        closeMemoryCommentComposer();
+        if (szCurrentTargetContainer) {
+          await renderSafeZoneInto(szCurrentTargetContainer);
+        }
+      }
     }
 
     async function renderSafeZoneInto(containerId) {
@@ -2797,6 +3009,27 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
               </div>
               ${mediaHtml}
               <p class="text-xs text-pinkapp-text font-semibold mt-2 leading-relaxed whitespace-pre-wrap">${escapeHtml(post.caption || '')}</p>
+
+              <div class="mt-3 pt-3 border-t border-pink-100">
+                <div class="space-y-1.5 mb-2">
+                  ${(post.comments || []).map(comment => `
+                    <div class="bg-pink-50 rounded-xl px-3 py-2">
+                      <div class="flex items-center justify-between gap-2 mb-0.5">
+                        <span class="text-[10px] font-fredoka font-bold text-pinkapp-dark">💗 ${escapeHtml(comment.byName || 'Unknown')}</span>
+                        <span class="text-[9px] text-pinkapp-muted">${new Date(comment.ts).toLocaleDateString('en-US', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short' })}</span>
+                      </div>
+                      <p class="text-[11px] text-pinkapp-text font-semibold leading-relaxed whitespace-pre-wrap">${escapeHtml(comment.text || '')}</p>
+                    </div>
+                  `).join('')}
+                </div>
+                <button onclick="openMemoryCommentComposer('${post.id}')"
+                  class="w-full px-3 py-2.5 rounded-xl border border-pink-200 bg-white text-left text-[11px] font-semibold text-pinkapp-muted flex items-center justify-between gap-2">
+                  <span>Write a comment... 💭</span>
+                  <span class="w-8 h-8 rounded-full bg-pinkapp-primary text-white flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-comment text-xs"></i>
+                  </span>
+                </button>
+              </div>
             </div>
           `;
         }).join('') + `</div>`;
@@ -2977,17 +3210,7 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
 
       const index = getSafeMemoryIndex();
       index.push({ id, ts, type: szActiveType, caption: caption.slice(0, 80), by, byName });
-      const mergedIndex = saveSafeMemoryIndex(index);
-
-      // Best-effort background mirror only. The local saved memory is authoritative.
-      if (firestoreAvailable()) {
-        Promise.resolve().then(() =>
-          window._fs.setDoc(
-            window._fs.doc(window._db, 'krepo', 'safezone:index'),
-            { value: mergedIndex, updatedAt: Date.now() }
-          )
-        ).catch(() => {});
-      }
+      await sSet('safezone:index', saveSafeMemoryIndex(index), true);
 
       playAudioTone(700, 'triangle', 0.15);
       confetti({ particleCount: 50, spread: 55, origin: { y: 0.7 } });
@@ -2995,5 +3218,33 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
       renderSafeZoneInto(szCurrentTargetContainer);
     }
   </script>
+
+  <!-- ============ MOBILE MEMORY COMMENT COMPOSER ============ -->
+  <div id="memory-comment-modal" class="hidden fixed inset-0 z-[9999] bg-pinkapp-bg flex-col">
+    <div class="flex items-center justify-between px-4 py-4 bg-white border-b border-pink-100 shrink-0">
+      <div>
+        <h3 class="font-fredoka font-bold text-pinkapp-text text-base">Leave a comment 💗</h3>
+        <p class="text-[10px] text-pinkapp-muted font-semibold">Add something to this memory</p>
+      </div>
+      <button onclick="closeMemoryCommentComposer()" class="w-10 h-10 rounded-full bg-pink-50 text-pinkapp-dark flex items-center justify-center">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="flex-1 p-4 flex flex-col">
+      <textarea id="memory-comment-modal-input" maxlength="300"
+        placeholder="Write your comment here... 💭"
+        class="w-full flex-1 min-h-[220px] resize-none p-4 rounded-2xl border-2 border-pink-200 focus:border-pinkapp-primary focus:outline-none text-base font-semibold text-pinkapp-text bg-white shadow-sm"></textarea>
+
+      <div class="pt-4 shrink-0">
+        <button onclick="submitMemoryCommentComposer()"
+          class="w-full py-3.5 rounded-2xl bg-pinkapp-primary hover:bg-pinkapp-dark text-white font-fredoka font-bold shadow-lg flex items-center justify-center gap-2">
+          <i class="fa-solid fa-paper-plane"></i>
+          Send Comment
+        </button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
