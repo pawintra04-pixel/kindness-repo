@@ -178,7 +178,13 @@ function subscribeComments(memId) {
     (err) => console.warn("[kindness-repo] comments listener:", memId, err),
   )
   memCommentUnsubs.set(memId, unsub)
-  unsubs.push(unsub)
+}
+
+function unsubscribeComments(memId) {
+  const unsub = memCommentUnsubs.get(memId)
+  if (unsub) { try { unsub() } catch (e) {} }
+  memCommentUnsubs.delete(memId)
+  memCommentsCache.delete(memId)
 }
 
 function attachListeners() {
@@ -207,8 +213,15 @@ function attachListeners() {
 
   // Memories (posts) + per-post comment subcollections
   unsubs.push(onSnapshot(collection(db, "memories"), (snap) => {
+    const previousIds = new Set(memCache.keys())
     memCache.clear()
     snap.forEach((d) => memCache.set(d.id, { id: d.id, ...d.data() }))
+
+    // Tear down comment listeners for memories that were deleted (on this
+    // device or any other), so a removed post doesn't keep an onSnapshot
+    // listener running forever in the background.
+    previousIds.forEach((id) => { if (!memCache.has(id)) unsubscribeComments(id) })
+
     memCache.forEach((_, id) => subscribeComments(id))
     memCache.forEach((_, id) => rebuildMemoryPost(id))
     rebuildMemIndex()
@@ -237,7 +250,12 @@ function stopListeners() {
   while (unsubs.length) {
     try { unsubs.pop()() } catch (e) {}
   }
+  // Comment listeners are stored separately (one per memory, torn down
+  // individually as memories are deleted), so they must be invoked here
+  // too — clearing the map alone would leave every open listener running.
+  memCommentUnsubs.forEach((unsub) => { try { unsub() } catch (e) {} })
   memCommentUnsubs.clear()
+  memCommentsCache.clear()
   listenersStarted = false
   listenersPromise = null
 }
@@ -354,6 +372,18 @@ async function sSet(key, value, shared) {
   }
 }
 
+async function deleteMemoryPost(id) {
+  // Firestore does not cascade-delete subcollections: deleting the parent
+  // "memories/{id}" doc alone would leave every comment doc under
+  // "memories/{id}/comments" orphaned in the database forever. Delete the
+  // comments first, then the post, so a deleted memory is fully removed.
+  const commentsSnap = await getDocs(collection(db, "memories", id, "comments"))
+  const ops = []
+  commentsSnap.forEach((d) => ops.push((b) => b.delete(d.ref)))
+  await commitChunked(ops)
+  await deleteDoc(doc(db, "memories", id))
+}
+
 async function sDelete(key, shared) {
   if (shared === undefined) shared = true
   cacheDelete(key)
@@ -361,7 +391,7 @@ async function sDelete(key, shared) {
   const t = keyToTarget(key)
   if (!firestoreReady) return
   try {
-    if (t.kind === "memPost") await deleteDoc(doc(db, "memories", t.id))
+    if (t.kind === "memPost") await deleteMemoryPost(t.id)
   } catch (e) {}
 }
 

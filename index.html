@@ -879,6 +879,14 @@
         if (todd && !todd.classList.contains('hidden')) renderSafeZoneInto('section-safezone-todd');
         if (admin && !admin.classList.contains('hidden')) renderSafeZoneInto('admin-section-safezone');
       }
+
+      if (key.startsWith('settings:')) {
+        // Repaint the countdown banner + Special Day copy live on every
+        // device. This intentionally does NOT touch the admin settings
+        // form inputs, so it never overwrites a value someone is mid-typing
+        // on their own device.
+        startBirthdayCountdownWatcher();
+      }
     }
 
     // Custom confirm/alert dialogs — sandboxed preview environments often block
