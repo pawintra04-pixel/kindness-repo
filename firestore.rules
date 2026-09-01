@@ -1,0 +1,90 @@
+rules_version = '2';
+
+// ============================================================
+// KINDNESS REPO — FIRESTORE SECURITY RULES (final)
+// ------------------------------------------------------------
+// This app authenticates every caller with Firebase Anonymous Auth.
+// There is no Firebase-side notion of "Todd" vs "Admin" (that gate is
+// purely a front-end concern), so the meaningful backend protection is:
+//   * only an authenticated (signed-in) client may read or write, and
+//   * each stored document must stay under Firestore's 1 MB/document
+//     hard limit.
+// That blocks all random public / unauthenticated traffic and oversized
+// writes, while allowing the two signed-in devices to sync.
+//
+// Collections used by the app (must match src/data-layer.js exactly):
+//   settings/app                       -> app settings (single shared doc)
+//   coupons/{couponId}                 -> one coupon per doc (deck field)
+//   usage/{entryId}                    -> one redemption / mission per doc
+//   memories/{memoryId}                -> one Safe Zone post per doc
+//   memories/{memoryId}/comments/{id}  -> comments as a subcollection
+//
+// Coupon redemption uses a Firestore transaction that reads the current
+// coupon document, verifies a use is still available, then atomically
+// increments its used count and creates one usage document. The transaction
+// touches ONLY the coupons and usage collections allowed below.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+// (or paste into Firebase console > Firestore Database > Rules)
+// ============================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Any signed-in (anonymous) client may participate.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Reject writes whose `media` field is a data string large enough to
+    // approach Firestore's 1 MB/document hard limit. Only applies to
+    // create/update (on delete there is no request.resource).
+    function withinSizeLimit() {
+      return !('media' in request.resource.data)
+        || request.resource.data.media == null
+        || (request.resource.data.media is string
+            && request.resource.data.media.size() < 900000);
+    }
+
+    // App settings: a single shared document ("app").
+    match /settings/{docId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // Coupons: one document per coupon, tagged with its deck
+    // ('ready' | 'bday'). Updated inside the atomic redemption transaction.
+    match /coupons/{couponId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && withinSizeLimit();
+      allow delete: if signedIn();
+    }
+
+    // Usage log: one document per redemption / mission entry.
+    // Created inside the same atomic redemption transaction.
+    match /usage/{entryId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && withinSizeLimit();
+      allow delete: if signedIn();
+    }
+
+    // Safe Zone memories: one document per post (may carry inline media),
+    // with comments in a subcollection so a busy thread never bloats the
+    // parent document.
+    match /memories/{memoryId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && withinSizeLimit();
+      allow delete: if signedIn();
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && withinSizeLimit();
+        allow delete: if signedIn();
+      }
+    }
+
+    // Everything else is denied by default (no other collections exist).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

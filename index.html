@@ -106,16 +106,7 @@
     .toggle-switch .knob { width: 18px; height: 18px; border-radius: 999px; background: white; position: absolute; top: 3px; left: 3px; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
     .toggle-switch.on .knob { left: 21px; }
 
-    .chat-bubble-mine { background: #F472B6; color: white; border-radius: 16px 16px 4px 16px; }
-    .chat-bubble-theirs { background: white; color: #4A0E17; border-radius: 16px 16px 16px 4px; border: 1px solid #FBCFE8; }
-
     .safezone-media { max-height: 220px; object-fit: cover; }
-  
-    #chat-fab {
-      position: fixed !important;
-      right: max(1.25rem, env(safe-area-inset-right));
-      bottom: max(1.25rem, env(safe-area-inset-bottom));
-    }
 
   </style>
 </head>
@@ -457,33 +448,6 @@
       </div>
 
     </main>
-
-    <!-- ============ CHAT FAB (floating, visible in todd/admin views) ============ -->
-    <button id="chat-fab" onclick="openChat()" class="hidden fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-pinkapp-primary hover:bg-pinkapp-dark text-white shadow-xl items-center justify-center text-xl transition transform hover:scale-105 active:scale-95">
-      <i class="fa-solid fa-comment-dots"></i>
-      <span id="chat-unread-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-fredoka font-bold flex items-center justify-center border-2 border-white">0</span>
-    </button>
-
-    <!-- ============ CHAT PANEL ============ -->
-    <div id="chat-panel" class="hidden absolute inset-0 z-[55] bg-black/40 backdrop-blur-sm flex flex-col justify-end rounded-[32px]">
-      <div class="bg-pinkapp-bg rounded-t-[28px] w-full max-h-[85%] flex flex-col shadow-2xl border-t-4 border-pinkapp-primary animate-pop-in">
-        <div class="px-5 py-3.5 flex justify-between items-center bg-white rounded-t-[24px] border-b border-pink-100">
-          <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-full bg-pinkapp-primary text-white flex items-center justify-center shadow"><i class="fa-solid fa-heart text-sm"></i></div>
-            <div>
-              <h3 class="font-fredoka font-bold text-pinkapp-text text-sm leading-tight">Chat 💬</h3>
-              <p class="text-[10px] text-pinkapp-muted font-semibold">Kindness Repo Chat</p>
-            </div>
-          </div>
-          <button onclick="closeChat()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500"><i class="fa-solid fa-xmark text-sm"></i></button>
-        </div>
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-2.5 min-h-[260px]"></div>
-        <div class="p-3 bg-white border-t border-pink-100 flex items-center gap-2">
-          <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 px-4 py-2.5 rounded-2xl border-2 border-pink-200 focus:border-pinkapp-primary focus:outline-none text-sm font-semibold text-pinkapp-text" onkeydown="if(event.key==='Enter'){sendChatMessage();}">
-          <button onclick="sendChatMessage()" class="w-10 h-10 rounded-full bg-pinkapp-primary hover:bg-pinkapp-dark text-white flex items-center justify-center shadow shrink-0"><i class="fa-solid fa-paper-plane text-sm"></i></button>
-        </div>
-      </div>
-    </div>
 
     <!-- ============ ADMIN: ADD/EDIT COUPON MODAL ============ -->
     <div id="coupon-form-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] hidden justify-center items-center p-4">
@@ -829,75 +793,37 @@
   </div>
 
   <!-- ============================================================
-       OPTIONAL FIREBASE SYNC
-       The app works immediately from localStorage even if these values are blank.
-       Add your Firebase config only if Todd and Admin should sync across devices.
+       BACKEND / DATA ARCHITECTURE (rebuilt)
+       Firestore is the source of truth, modeled as normalized
+       collections (coupons, usage, memories + comments,
+       settings) instead of the old single-document array mirrors.
+       Access is gated by Firebase Anonymous Auth. The module below
+       is bundled by Vite from the npm `firebase` SDK and exposes the
+       same key-based facade (sGet/sSet/sDelete/seedSharedKey/...)
+       that the UI script already calls, so the visuals are untouched.
        ============================================================ -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-    import {
-      getFirestore, doc, getDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot
-    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyDKaawb7diEHvHMMRnJnR989IfK1mE37p0",
-      authDomain: "kindness-repo.firebaseapp.com",
-      projectId: "kindness-repo",
-      storageBucket: "kindness-repo.firebasestorage.app",
-      messagingSenderId: "456291938469",
-      appId: "1:456291938469:web:fca195868cc9d01ea0dd4c"
-    };
-
-    try {
-      const app = initializeApp(firebaseConfig);
-      window._db = getFirestore(app);
-      window._fs = { doc, getDoc, setDoc, deleteDoc, serverTimestamp, onSnapshot };
-      window._firebaseReady = true;
-    } catch (e) {
-      console.error('Firebase init failed — check firebaseConfig values.', e);
-      window._firebaseReady = false;
-    }
-  </script>
+  <script type="module" src="/src/data-layer.js"></script>
 
   <script>
     // ============================================================
     // STORAGE HELPERS
-    // "shared" data (coupons, chat, usage log, Safe Zone, settings)
+    // "shared" data (coupons, usage log, Safe Zone, settings)
     // lives in Firestore so the admin and Todd see the same data.
-    // "personal" data (which device is logged in as who, per-device
-    // chat read receipts) lives in this browser's localStorage.
+    // "personal" data (which device is logged in as who) lives in
+    // this browser's localStorage.
     // ============================================================
     function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-    // Never let Firebase/network problems freeze the app UI. Shared operations
-    // fail fast and the app falls back to its built-in defaults until Firestore
-    // becomes available again.
-    function promiseWithTimeout(promise, ms, fallbackValue) {
-      return Promise.race([
-        promise,
-        new Promise(resolve => setTimeout(() => resolve(fallbackValue), ms))
-      ]);
-    }
-
-    function firestoreAvailable() {
-      return !!(
-        window._firebaseReady &&
-        window._db &&
-        window._fs &&
-        window._fs.doc &&
-        window._fs.getDoc &&
-        window._fs.setDoc
-      );
-    }
-
-    // ============================================================
-    // FRESH PRODUCTION DATA LAYER
-    // ============================================================
-    // IMPORTANT:
-    // This build intentionally uses a brand-new namespace + Firestore collection.
-    // Old test data from previous builds is therefore ignored completely.
+    // ------------------------------------------------------------
+    // LOCAL READ CACHE
+    // The rebuilt data layer (src/data-layer.js) keeps Firestore as the
+    // source of truth and mirrors every collection into these localStorage
+    // keys, so each screen still reads instantly through the same facade.
+    // The sync engine, writes, and Anonymous-Auth gating now live in that
+    // module and are exposed on window (sGet/sSet/sDelete/seedSharedKey/
+    // pullRemoteKey/firestoreAvailable/start|stopRealtimeSync/...).
+    // ------------------------------------------------------------
     const STORAGE_PREFIX = 'kr_live_v1_';
-    const FIRESTORE_COLLECTION = 'kindness_repo_live_v1';
 
     function localRead(key) {
       try {
@@ -925,195 +851,8 @@
       } catch (e) {}
     }
 
-    function docRef(key) {
-      return window._fs.doc(window._db, FIRESTORE_COLLECTION, key);
-    }
-
-    function mergeById(a, b, limit) {
-      const map = new Map();
-      const add = (item) => {
-        if (!item || !item.id) return;
-        const old = map.get(item.id) || {};
-        map.set(item.id, { ...old, ...item });
-      };
-      (Array.isArray(a) ? a : []).forEach(add);
-      (Array.isArray(b) ? b : []).forEach(add);
-
-      let arr = Array.from(map.values());
-      arr.sort((x, y) => {
-        const tx = new Date(x.ts || x.timestamp || x.createdAt || 0).getTime();
-        const ty = new Date(y.ts || y.timestamp || y.createdAt || 0).getTime();
-        return tx - ty;
-      });
-      if (limit && arr.length > limit) arr = arr.slice(-limit);
-      return arr;
-    }
-
-    function mergeUsage(a, b) {
-      const map = new Map();
-      [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach(item => {
-        if (!item || !item.id) return;
-        const prev = map.get(item.id) || {};
-        const merged = { ...prev, ...item };
-
-        // Completion is sticky: an older device cannot make a completed mission pending again.
-        if (prev.status === 'completed' || item.status === 'completed') {
-          merged.status = 'completed';
-          merged.completedAt = item.completedAt || prev.completedAt || null;
-        }
-        map.set(item.id, merged);
-      });
-      return Array.from(map.values())
-        .sort((x, y) => new Date(x.timestamp || x.ts || 0) - new Date(y.timestamp || y.ts || 0))
-        .slice(-500);
-    }
-
-    function mergeComments(a, b) {
-      return mergeById(a, b, 500);
-    }
-
-    function mergeMemoryPost(a, b) {
-      if (!a) return b || null;
-      if (!b) return a || null;
-      const merged = { ...a, ...b };
-      merged.comments = mergeComments(a.comments, b.comments);
-      return merged;
-    }
-
-    function mergeSharedValue(key, localValue, remoteValue) {
-      if (key === 'chat:messages') return mergeById(localValue, remoteValue, 500);
-      if (key === 'usage:log') return mergeUsage(localValue, remoteValue);
-      if (key === 'safezone:index') return mergeById(localValue, remoteValue, 1000);
-      if (key.startsWith('safezone:post:')) return mergeMemoryPost(localValue, remoteValue);
-      return remoteValue;
-    }
-
-    function isMergeKey(key) {
-      return (
-        key === 'chat:messages' ||
-        key === 'usage:log' ||
-        key === 'safezone:index' ||
-        key.startsWith('safezone:post:')
-      );
-    }
-
-    async function getRemoteRecord(key) {
-      if (!firestoreAvailable()) return null;
-      try {
-        const snap = await promiseWithTimeout(window._fs.getDoc(docRef(key)), 2500, null);
-        if (!snap || !snap.exists()) return null;
-        return snap.data() || null;
-      } catch (e) {
-        console.warn('Remote read failed:', key, e);
-        return null;
-      }
-    }
-
-    async function writeRemoteRecord(key, value) {
-      if (!firestoreAvailable()) return false;
-      try {
-        const write = window._fs.setDoc(docRef(key), {
-          value,
-          updatedAt: Date.now()
-        });
-        const result = await promiseWithTimeout(write.then(() => true).catch(() => false), 3000, false);
-        return !!result;
-      } catch (e) {
-        console.warn('Remote write failed:', key, e);
-        return false;
-      }
-    }
-
-    async function sGet(key, shared) {
-      if (shared === undefined) shared = true;
-      // Local cache makes every screen instant.
-      return localRead(key);
-    }
-
-    async function sSet(key, value, shared) {
-      if (shared === undefined) shared = true;
-
-      // Personal identity/read-receipt data stays only on this browser.
-      if (!shared) return localWrite(key, value);
-
-      // For append/history data, first merge with the newest cloud copy.
-      if (firestoreAvailable() && isMergeKey(key)) {
-        const remote = await getRemoteRecord(key);
-        if (remote && remote.value !== undefined) {
-          value = mergeSharedValue(key, remote.value, value);
-        }
-      }
-
-      // Update the current screen immediately.
-      localWrite(key, value);
-
-      // Shared actions are committed to Firebase so every device gets the same result.
-      if (firestoreAvailable()) {
-        const ok = await writeRemoteRecord(key, value);
-        if (!ok) {
-          // Do not lose the user's action. Background sync retries later.
-          console.warn('Saved locally; cloud retry will happen:', key);
-        }
-      }
-      return true;
-    }
-
-    async function sDelete(key, shared) {
-      if (shared === undefined) shared = true;
-      localDelete(key);
-
-      if (shared && firestoreAvailable()) {
-        try {
-          await promiseWithTimeout(window._fs.deleteDoc(docRef(key)), 2500, null);
-        } catch (e) {}
-      }
-    }
-
-    async function pullRemoteKey(key) {
-      if (!firestoreAvailable()) return false;
-      const remote = await getRemoteRecord(key);
-      if (!remote || remote.value === undefined) return false;
-
-      const current = localRead(key);
-      const value = isMergeKey(key)
-        ? mergeSharedValue(key, current, remote.value)
-        : remote.value;
-
-      localWrite(key, value);
-
-      // If our cache contained an item the cloud did not, repair cloud too.
-      if (isMergeKey(key)) {
-        const a = JSON.stringify(value);
-        const b = JSON.stringify(remote.value);
-        if (a !== b) writeRemoteRecord(key, value);
-      }
-      return true;
-    }
-
-    async function seedSharedKey(key, fallback) {
-      if (!firestoreAvailable()) {
-        if (localRead(key) === null) localWrite(key, fallback);
-        return;
-      }
-
-      const remote = await getRemoteRecord(key);
-      if (remote && remote.value !== undefined) {
-        localWrite(key, remote.value);
-        return;
-      }
-
-      localWrite(key, fallback);
-      await writeRemoteRecord(key, fallback);
-    }
-
     function refreshVisibleSharedUI(key) {
       if (!currentUser) return;
-
-      if (key === 'chat:messages') {
-        refreshChatBadge();
-        const panel = document.getElementById('chat-panel');
-        if (panel && !panel.classList.contains('hidden')) renderChatMessages();
-      }
 
       if (key === 'usage:log') {
         if (currentUser.role === 'admin' && typeof adminActiveTab !== 'undefined' && adminActiveTab === 'usage') {
@@ -1140,125 +879,14 @@
         if (todd && !todd.classList.contains('hidden')) renderSafeZoneInto('section-safezone-todd');
         if (admin && !admin.classList.contains('hidden')) renderSafeZoneInto('admin-section-safezone');
       }
-    }
 
-    const liveUnsubs = [];
-    const watchedMemoryPosts = new Set();
-
-    function stopRealtimeSync() {
-      while (liveUnsubs.length) {
-        try { liveUnsubs.pop()(); } catch (e) {}
+      if (key.startsWith('settings:')) {
+        // Repaint the countdown banner + Special Day copy live on every
+        // device. This intentionally does NOT touch the admin settings
+        // form inputs, so it never overwrites a value someone is mid-typing
+        // on their own device.
+        startBirthdayCountdownWatcher();
       }
-      watchedMemoryPosts.clear();
-    }
-
-    function watchMemoryPost(postId) {
-      if (!firestoreAvailable() || !postId || watchedMemoryPosts.has(postId)) return;
-      watchedMemoryPosts.add(postId);
-
-      const unsub = window._fs.onSnapshot(docRef('safezone:post:' + postId), snap => {
-        if (!snap.exists()) return;
-        const data = snap.data();
-        if (!data || data.value === undefined) return;
-
-        const key = 'safezone:post:' + postId;
-        const merged = mergeMemoryPost(localRead(key), data.value);
-        localWrite(key, merged);
-        refreshVisibleSharedUI(key);
-      }, err => console.warn('Memory realtime listener:', err));
-
-      liveUnsubs.push(unsub);
-    }
-
-    function watchSharedKey(key) {
-      if (!firestoreAvailable()) return;
-
-      const unsub = window._fs.onSnapshot(docRef(key), snap => {
-        if (!snap.exists()) return;
-        const data = snap.data();
-        if (!data || data.value === undefined) return;
-
-        const current = localRead(key);
-        const value = isMergeKey(key)
-          ? mergeSharedValue(key, current, data.value)
-          : data.value;
-
-        localWrite(key, value);
-
-        if (key === 'safezone:index' && Array.isArray(value)) {
-          value.forEach(item => item && item.id && watchMemoryPost(item.id));
-        }
-
-        refreshVisibleSharedUI(key);
-      }, err => console.warn('Realtime listener:', key, err));
-
-      liveUnsubs.push(unsub);
-    }
-
-    function startRealtimeSync() {
-      if (!firestoreAvailable() || !window._fs.onSnapshot) return;
-      stopRealtimeSync();
-
-      [
-        'coupons:ready',
-        'coupons:bday',
-        'usage:log',
-        'chat:messages',
-        'safezone:index',
-        'settings:countdownTarget',
-        'settings:countdownLabel',
-        'settings:countdownComplete',
-        'settings:specialDayName',
-        'settings:specialMessage',
-        'settings:welcomeTitle',
-        'settings:welcomeSubtitle'
-      ].forEach(watchSharedKey);
-
-      const idx = localRead('safezone:index') || [];
-      idx.forEach(item => item && item.id && watchMemoryPost(item.id));
-    }
-
-    let backgroundSyncBusy = false;
-    async function backgroundSyncSharedData() {
-      if (backgroundSyncBusy || !firestoreAvailable()) return;
-      backgroundSyncBusy = true;
-      try {
-        const keys = [
-          'coupons:ready',
-          'coupons:bday',
-          'usage:log',
-          'chat:messages',
-          'safezone:index',
-          'settings:countdownTarget',
-          'settings:countdownLabel',
-          'settings:countdownComplete',
-          'settings:specialDayName',
-          'settings:specialMessage',
-          'settings:welcomeTitle',
-          'settings:welcomeSubtitle'
-        ];
-
-        await Promise.all(keys.map(pullRemoteKey));
-
-        const index = localRead('safezone:index') || [];
-        await Promise.all(index.slice(-100).map(item =>
-          item && item.id ? pullRemoteKey('safezone:post:' + item.id) : Promise.resolve(false)
-        ));
-
-        // Render the latest cache after fallback polling.
-        ['chat:messages', 'usage:log', 'coupons:ready', 'coupons:bday', 'safezone:index']
-          .forEach(refreshVisibleSharedUI);
-      } finally {
-        backgroundSyncBusy = false;
-      }
-    }
-
-    function startBackgroundSync() {
-      // Realtime listeners are primary. Polling is only a safety net.
-      startRealtimeSync();
-      setTimeout(backgroundSyncSharedData, 700);
-      if (window._krSyncInterval) clearInterval(window._krSyncInterval);
-      window._krSyncInterval = setInterval(backgroundSyncSharedData, 10000);
     }
 
     // Custom confirm/alert dialogs — sandboxed preview environments often block
@@ -1324,9 +952,7 @@
     let currentGachaResult = null;
     let isBirthdayUnlocked = false;
 
-    let chatPollTimer = null;
-    let usagePollTimer = null;
-    let badgePollTimer = null;
+  let usagePollTimer = null;
     let szRecorder = null;
     let szRecordedChunks = [];
     let szRecordedBase64 = null;
@@ -1373,18 +999,12 @@
         : card
       );
 
-      localWrite('coupons:bday', cards);
       localWrite(migrationKey, true);
 
-      // Mirror the corrected deck in the background if Firebase is configured.
-      if (firestoreAvailable()) {
-        Promise.resolve().then(() =>
-          window._fs.setDoc(
-            window._fs.doc(window._db, 'krepo', 'coupons:bday'),
-            { value: cards, updatedAt: Date.now() }
-          )
-        ).catch(() => {});
-      }
+      // Persist the corrected deck through the rebuilt data layer, which
+      // writes each coupon as its own normalized document in Firestore.
+      try { await sSet('coupons:bday', cards); }
+      catch (e) { localWrite('coupons:bday', cards); }
     }
 
     // ============================================================
@@ -1416,7 +1036,6 @@
         if (identity && identity.role === 'admin') await sDelete('identity', false);
         showLoginScreen();
       }
-      startBadgePolling();
 
       // Seed local data immediately. Network sync, if configured, happens later.
       await ensureSeedData();
@@ -1449,9 +1068,8 @@
       // On a brand-new deployment these keys are created once from clean defaults.
       await seedSharedKey('coupons:ready', DEFAULT_READY_CARDS.map(c => ({ ...c })));
       await seedSharedKey('coupons:bday', DEFAULT_BDAY_CARDS.map(c => ({ ...c })));
-      await seedSharedKey('usage:log', []);
-      await seedSharedKey('chat:messages', []);
-      await seedSharedKey('safezone:index', []);
+  await seedSharedKey('usage:log', []);
+  await seedSharedKey('safezone:index', []);
 
       await seedSharedKey('settings:countdownTarget', DEFAULT_COUNTDOWN_TARGET);
       await seedSharedKey('settings:countdownLabel', DEFAULT_COUNTDOWN_LABEL);
@@ -1581,8 +1199,6 @@
       document.getElementById('welcome-screen').classList.add('hidden');
       document.getElementById('admin-header').classList.add('hidden');
       document.getElementById('admin-main').classList.add('hidden');
-      document.getElementById('chat-fab').classList.add('hidden');
-      document.getElementById('chat-fab').classList.remove('flex');
       document.getElementById('todd-birthdate-input').value = '';
       document.getElementById('admin-user-input').value = '';
       document.getElementById('admin-pass-input').value = '';
@@ -1611,11 +1227,6 @@
 
       document.getElementById('welcome-screen').classList.remove('hidden');
       document.getElementById('welcome-screen').classList.add('flex', 'flex-col');
-
-      document.getElementById('chat-fab').classList.remove('hidden');
-      document.getElementById('chat-fab').classList.add('flex');
-      refreshChatBadge();
-      startBadgePolling();
     }
 
     function enterAppFromWelcome() {
@@ -1643,11 +1254,6 @@
 
       await loadCoupons();
       switchAdminTab('usage');
-
-      document.getElementById('chat-fab').classList.remove('hidden');
-      document.getElementById('chat-fab').classList.add('flex');
-      refreshChatBadge();
-      startBadgePolling();
     }
 
     async function loadCoupons() {
@@ -2370,23 +1976,15 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
     async function confirmRedeem() {
       document.getElementById('confirm-use-modal').classList.add('hidden');
       playAudioTone(659.25, 'triangle', 0.15);
-      currentCardObj.used += 1;
 
-      const list = currentCardType === 'ready' ? readyCards : bdayUnlockedCards;
-      const idx = list.findIndex(c => c.id === currentCardObj.id);
-      if (idx > -1) list[idx] = currentCardObj;
-      await sSet(currentCardType === 'ready' ? 'coupons:ready' : 'coupons:bday', list, true);
-
-      renderReadyCards();
-      if (isBirthdayUnlocked) renderBdayCards();
-      closeModal();
-
+      // Do not change the coupon locally before Firestore accepts it.
+      // The actual coupon increment + usage entry are committed together in
+      // one Firestore transaction by redeemCouponAtomic().
       if (currentCardObj.gachaAllowed && currentGachaChoice) {
         runGachaSpin();
       } else {
         currentGachaResult = null;
         await recordUsage();
-        showCouponTicketModal();
       }
     }
 
@@ -2416,15 +2014,10 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       playCelebrationFanfare();
       await recordUsage();
-      showCouponTicketModal();
     }
 
     async function recordUsage() {
-      const log = (await sGet('usage:log', true)) || [];
       const entry = {
-        id: 'u_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-        cardId: currentCardObj.id,
-        cardType: currentCardType,
         cardTitle: `${currentCardObj.title} ${currentCardObj.emoji}`,
         note: currentNoteUsed || '',
         gachaUsed: !!currentGachaResult,
@@ -2436,35 +2029,40 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
         status: 'pending',
         completedAt: null
       };
-      log.push(entry);
-      if (log.length > 300) log.splice(0, log.length - 300);
-      let ok = await sSet('usage:log', log, true);
-      if (!ok) {
-        // one more explicit attempt before giving up — this record is important
-        await wait(500);
-        ok = await sSet('usage:log', log, true);
-      }
-      if (!ok) {
-        await customAlert("This redemption didn't save correctly — please check your connection and try tapping the coupon again, or let the admin know.");
-      } else {
-        // verify it actually stuck (protects against a storage backend that
-        // reports success but silently drops the write)
-        const verify = (await sGet('usage:log', true)) || [];
-        if (!verify.some(e => e.id === entry.id)) {
-          await sSet('usage:log', log, true);
-        }
+
+      if (typeof window.redeemCouponAtomic !== 'function') {
+        await customAlert("The redemption system isn't ready yet. Please refresh and try again.");
+        return false;
       }
 
-      const chatLog = (await sGet('chat:messages', true)) || [];
-      chatLog.push({
-        id: 'sysmsg_' + Date.now(),
-        from: 'system',
-        text: `🎟️ Redeemed "${currentCardObj.title} ${currentCardObj.emoji}"${currentGachaResult ? ` (bonus: ${currentGachaResult.rarity} ${currentGachaResult.name})` : ''} — pending, waiting to be marked complete`,
-        ts: new Date().toISOString()
-      });
-      if (chatLog.length > 200) chatLog.splice(0, chatLog.length - 200);
-      await sSet('chat:messages', chatLog, true);
-    }
+      const result = await window.redeemCouponAtomic(currentCardObj.id, currentCardType, entry);
+      if (!result.ok) {
+        if (result.reason === 'coupon-exhausted') {
+          await customAlert('This coupon has already been fully used. The latest status has been synced from the other device.');
+        } else if (result.reason === 'offline') {
+          await customAlert('You need an internet connection to redeem a coupon safely. Please reconnect and try again.');
+        } else {
+          await customAlert("This redemption didn't save correctly — please check your connection and try again, or let the admin know.");
+        }
+        await loadCoupons();
+        renderReadyCards();
+        if (isBirthdayUnlocked) renderBdayCards();
+        return false;
+      }
+
+      // Update this screen immediately; the Firestore onSnapshot listener will
+      // shortly replace it with the same authoritative value on every device.
+      currentCardObj.used = result.nextUsed;
+      const list = currentCardType === 'ready' ? readyCards : bdayUnlockedCards;
+      const idx = list.findIndex(c => c.id === currentCardObj.id);
+      if (idx > -1) list[idx] = currentCardObj;
+      renderReadyCards();
+      if (isBirthdayUnlocked) renderBdayCards();
+      closeModal();
+      showCouponTicketModal();
+      return true;
+
+  }
 
     async function markMissionComplete(entryId) {
       if (!(await customConfirm('Mark this mission as 100% complete?'))) return;
@@ -2475,17 +2073,7 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
       log[idx].completedAt = new Date().toISOString();
       await sSet('usage:log', log, true);
 
-      const chatLog = (await sGet('chat:messages', true)) || [];
-      chatLog.push({
-        id: 'sysmsg_' + Date.now(),
-        from: 'system',
-        text: `✅ Mission complete: "${log[idx].cardTitle}" — 100% done!`,
-        ts: new Date().toISOString()
-      });
-      if (chatLog.length > 200) chatLog.splice(0, chatLog.length - 200);
-      await sSet('chat:messages', chatLog, true);
-
-      playAudioTone(700, 'triangle', 0.15);
+  playAudioTone(700, 'triangle', 0.15);
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
       refreshAdminUsage();
     }
@@ -2845,113 +2433,14 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
       renderAdminManageList();
     }
 
-    // ============================================================
-    // CHAT
-    // ============================================================
-    async function openChat() {
-      playAudioTone(500, 'sine', 0.08);
-      const panel = document.getElementById('chat-panel');
-      panel.classList.remove('hidden');
-      panel.classList.add('flex');
-      await renderChatMessages();
-      await sSet('chat:lastSeenAt:' + (currentUser ? currentUser.role : 'guest'), new Date().toISOString(), false);
-      refreshChatBadge();
-      if (chatPollTimer) clearInterval(chatPollTimer);
-      chatPollTimer = setInterval(async () => {
-        await renderChatMessages();
-        await sSet('chat:lastSeenAt:' + (currentUser ? currentUser.role : 'guest'), new Date().toISOString(), false);
-        refreshChatBadge();
-      }, 4000);
-    }
-
-    function closeChat() {
-      const panel = document.getElementById('chat-panel');
-      panel.classList.add('hidden');
-      panel.classList.remove('flex');
-      if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
-    }
-
-    async function renderChatMessages() {
-      const log = (await sGet('chat:messages', true)) || [];
-      const container = document.getElementById('chat-messages');
-      if (log.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 text-xs text-pinkapp-muted font-semibold">No messages yet — say hi! 💌</div>`;
-        return;
-      }
-      const myRole = currentUser ? currentUser.role : null;
-      container.innerHTML = log.map(msg => {
-        if (msg.from === 'system') {
-          return `<div class="text-center"><span class="inline-block text-[10.5px] bg-pink-100 text-pinkapp-dark font-fredoka font-semibold px-3 py-1 rounded-full">${escapeHtml(msg.text)}</span></div>`;
-        }
-        const mine = msg.from === myRole;
-        const label = msg.from === 'admin' ? 'Admin' : 'Todd';
-        const dt = new Date(msg.ts);
-        const timeStr = dt.toLocaleTimeString('en-US', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
-        return `
-          <div class="flex ${mine ? 'justify-end' : 'justify-start'}">
-            <div class="max-w-[75%] ${mine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} px-3.5 py-2 shadow-sm">
-              ${!mine ? `<p class="text-[9.5px] font-fredoka font-bold opacity-70 mb-0.5">${label}</p>` : ''}
-              <p class="text-[13px] font-semibold leading-snug whitespace-pre-wrap">${escapeHtml(msg.text)}</p>
-              <p class="text-[9px] opacity-70 text-right mt-0.5">${timeStr}</p>
-            </div>
-          </div>
-        `;
-      }).join('');
-      container.scrollTop = container.scrollHeight;
-    }
-
-    async function sendChatMessage() {
-      const input = document.getElementById('chat-input');
-      const text = input.value.trim();
-      if (!text || !currentUser) return;
-      const log = (await sGet('chat:messages', true)) || [];
-      log.push({
-        id: 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9),
-        from: currentUser.role,
-        text,
-        ts: new Date().toISOString()
-      });
-      if (log.length > 200) log.splice(0, log.length - 200);
-      await sSet('chat:messages', log, true);
-      input.value = '';
-      playAudioTone(650, 'sine', 0.08);
-      await renderChatMessages();
-    }
-
-    async function refreshChatBadge() {
-      if (!currentUser) return;
-      const log = (await sGet('chat:messages', true)) || [];
-      const lastSeen = await sGet('chat:lastSeenAt:' + currentUser.role, false);
-      const lastSeenTime = lastSeen ? new Date(lastSeen).getTime() : 0;
-      const unread = log.filter(m => m.from !== currentUser.role && m.from !== 'system' && new Date(m.ts).getTime() > lastSeenTime).length;
-      const badge = document.getElementById('chat-unread-badge');
-      if (unread > 0) {
-        badge.innerText = unread > 9 ? '9+' : String(unread);
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
-    }
-
-    function startBadgePolling() {
-      stopBadgePolling();
-      badgePollTimer = setInterval(() => { refreshChatBadge(); }, 9000);
-    }
-    function stopBadgePolling() {
-      if (badgePollTimer) { clearInterval(badgePollTimer); badgePollTimer = null; }
-    }
-
     function stopAllPolling() {
-      stopBadgePolling();
       stopUsagePolling();
       stopToddMissionsPolling();
-      if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
       if (window._bdayInterval) { clearInterval(window._bdayInterval); window._bdayInterval = null; }
     }
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && currentUser) {
-        refreshChatBadge();
         if (currentUser.role === 'admin' && adminActiveTab === 'usage') refreshAdminUsage();
       }
     });
