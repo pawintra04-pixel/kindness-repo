@@ -106,16 +106,7 @@
     .toggle-switch .knob { width: 18px; height: 18px; border-radius: 999px; background: white; position: absolute; top: 3px; left: 3px; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
     .toggle-switch.on .knob { left: 21px; }
 
-    .chat-bubble-mine { background: #F472B6; color: white; border-radius: 16px 16px 4px 16px; }
-    .chat-bubble-theirs { background: white; color: #4A0E17; border-radius: 16px 16px 16px 4px; border: 1px solid #FBCFE8; }
-
     .safezone-media { max-height: 220px; object-fit: cover; }
-  
-    #chat-fab {
-      position: fixed !important;
-      right: max(1.25rem, env(safe-area-inset-right));
-      bottom: max(1.25rem, env(safe-area-inset-bottom));
-    }
 
   </style>
 </head>
@@ -457,33 +448,6 @@
       </div>
 
     </main>
-
-    <!-- ============ CHAT FAB (floating, visible in todd/admin views) ============ -->
-    <button id="chat-fab" onclick="openChat()" class="hidden fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-pinkapp-primary hover:bg-pinkapp-dark text-white shadow-xl items-center justify-center text-xl transition transform hover:scale-105 active:scale-95">
-      <i class="fa-solid fa-comment-dots"></i>
-      <span id="chat-unread-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-fredoka font-bold flex items-center justify-center border-2 border-white">0</span>
-    </button>
-
-    <!-- ============ CHAT PANEL ============ -->
-    <div id="chat-panel" class="hidden absolute inset-0 z-[55] bg-black/40 backdrop-blur-sm flex flex-col justify-end rounded-[32px]">
-      <div class="bg-pinkapp-bg rounded-t-[28px] w-full max-h-[85%] flex flex-col shadow-2xl border-t-4 border-pinkapp-primary animate-pop-in">
-        <div class="px-5 py-3.5 flex justify-between items-center bg-white rounded-t-[24px] border-b border-pink-100">
-          <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-full bg-pinkapp-primary text-white flex items-center justify-center shadow"><i class="fa-solid fa-heart text-sm"></i></div>
-            <div>
-              <h3 class="font-fredoka font-bold text-pinkapp-text text-sm leading-tight">Chat 💬</h3>
-              <p class="text-[10px] text-pinkapp-muted font-semibold">Kindness Repo Chat</p>
-            </div>
-          </div>
-          <button onclick="closeChat()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500"><i class="fa-solid fa-xmark text-sm"></i></button>
-        </div>
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-2.5 min-h-[260px]"></div>
-        <div class="p-3 bg-white border-t border-pink-100 flex items-center gap-2">
-          <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 px-4 py-2.5 rounded-2xl border-2 border-pink-200 focus:border-pinkapp-primary focus:outline-none text-sm font-semibold text-pinkapp-text" onkeydown="if(event.key==='Enter'){sendChatMessage();}">
-          <button onclick="sendChatMessage()" class="w-10 h-10 rounded-full bg-pinkapp-primary hover:bg-pinkapp-dark text-white flex items-center justify-center shadow shrink-0"><i class="fa-solid fa-paper-plane text-sm"></i></button>
-        </div>
-      </div>
-    </div>
 
     <!-- ============ ADMIN: ADD/EDIT COUPON MODAL ============ -->
     <div id="coupon-form-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65] hidden justify-center items-center p-4">
@@ -831,7 +795,7 @@
   <!-- ============================================================
        BACKEND / DATA ARCHITECTURE (rebuilt)
        Firestore is the source of truth, modeled as normalized
-       collections (coupons, usage, chat, memories + comments,
+       collections (coupons, usage, memories + comments,
        settings) instead of the old single-document array mirrors.
        Access is gated by Firebase Anonymous Auth. The module below
        is bundled by Vite from the npm `firebase` SDK and exposes the
@@ -843,10 +807,10 @@
   <script>
     // ============================================================
     // STORAGE HELPERS
-    // "shared" data (coupons, chat, usage log, Safe Zone, settings)
+    // "shared" data (coupons, usage log, Safe Zone, settings)
     // lives in Firestore so the admin and Todd see the same data.
-    // "personal" data (which device is logged in as who, per-device
-    // chat read receipts) lives in this browser's localStorage.
+    // "personal" data (which device is logged in as who) lives in
+    // this browser's localStorage.
     // ============================================================
     function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
@@ -889,12 +853,6 @@
 
     function refreshVisibleSharedUI(key) {
       if (!currentUser) return;
-
-      if (key === 'chat:messages') {
-        refreshChatBadge();
-        const panel = document.getElementById('chat-panel');
-        if (panel && !panel.classList.contains('hidden')) renderChatMessages();
-      }
 
       if (key === 'usage:log') {
         if (currentUser.role === 'admin' && typeof adminActiveTab !== 'undefined' && adminActiveTab === 'usage') {
@@ -986,9 +944,7 @@
     let currentGachaResult = null;
     let isBirthdayUnlocked = false;
 
-    let chatPollTimer = null;
-    let usagePollTimer = null;
-    let badgePollTimer = null;
+  let usagePollTimer = null;
     let szRecorder = null;
     let szRecordedChunks = [];
     let szRecordedBase64 = null;
@@ -1072,7 +1028,6 @@
         if (identity && identity.role === 'admin') await sDelete('identity', false);
         showLoginScreen();
       }
-      startBadgePolling();
 
       // Seed local data immediately. Network sync, if configured, happens later.
       await ensureSeedData();
@@ -1105,9 +1060,8 @@
       // On a brand-new deployment these keys are created once from clean defaults.
       await seedSharedKey('coupons:ready', DEFAULT_READY_CARDS.map(c => ({ ...c })));
       await seedSharedKey('coupons:bday', DEFAULT_BDAY_CARDS.map(c => ({ ...c })));
-      await seedSharedKey('usage:log', []);
-      await seedSharedKey('chat:messages', []);
-      await seedSharedKey('safezone:index', []);
+  await seedSharedKey('usage:log', []);
+  await seedSharedKey('safezone:index', []);
 
       await seedSharedKey('settings:countdownTarget', DEFAULT_COUNTDOWN_TARGET);
       await seedSharedKey('settings:countdownLabel', DEFAULT_COUNTDOWN_LABEL);
@@ -1237,8 +1191,6 @@
       document.getElementById('welcome-screen').classList.add('hidden');
       document.getElementById('admin-header').classList.add('hidden');
       document.getElementById('admin-main').classList.add('hidden');
-      document.getElementById('chat-fab').classList.add('hidden');
-      document.getElementById('chat-fab').classList.remove('flex');
       document.getElementById('todd-birthdate-input').value = '';
       document.getElementById('admin-user-input').value = '';
       document.getElementById('admin-pass-input').value = '';
@@ -1267,11 +1219,6 @@
 
       document.getElementById('welcome-screen').classList.remove('hidden');
       document.getElementById('welcome-screen').classList.add('flex', 'flex-col');
-
-      document.getElementById('chat-fab').classList.remove('hidden');
-      document.getElementById('chat-fab').classList.add('flex');
-      refreshChatBadge();
-      startBadgePolling();
     }
 
     function enterAppFromWelcome() {
@@ -1299,11 +1246,6 @@
 
       await loadCoupons();
       switchAdminTab('usage');
-
-      document.getElementById('chat-fab').classList.remove('hidden');
-      document.getElementById('chat-fab').classList.add('flex');
-      refreshChatBadge();
-      startBadgePolling();
     }
 
     async function loadCoupons() {
@@ -2111,16 +2053,7 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
         }
       }
 
-      const chatLog = (await sGet('chat:messages', true)) || [];
-      chatLog.push({
-        id: 'sysmsg_' + Date.now(),
-        from: 'system',
-        text: `🎟️ Redeemed "${currentCardObj.title} ${currentCardObj.emoji}"${currentGachaResult ? ` (bonus: ${currentGachaResult.rarity} ${currentGachaResult.name})` : ''} — pending, waiting to be marked complete`,
-        ts: new Date().toISOString()
-      });
-      if (chatLog.length > 200) chatLog.splice(0, chatLog.length - 200);
-      await sSet('chat:messages', chatLog, true);
-    }
+  }
 
     async function markMissionComplete(entryId) {
       if (!(await customConfirm('Mark this mission as 100% complete?'))) return;
@@ -2131,17 +2064,7 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
       log[idx].completedAt = new Date().toISOString();
       await sSet('usage:log', log, true);
 
-      const chatLog = (await sGet('chat:messages', true)) || [];
-      chatLog.push({
-        id: 'sysmsg_' + Date.now(),
-        from: 'system',
-        text: `✅ Mission complete: "${log[idx].cardTitle}" — 100% done!`,
-        ts: new Date().toISOString()
-      });
-      if (chatLog.length > 200) chatLog.splice(0, chatLog.length - 200);
-      await sSet('chat:messages', chatLog, true);
-
-      playAudioTone(700, 'triangle', 0.15);
+  playAudioTone(700, 'triangle', 0.15);
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
       refreshAdminUsage();
     }
@@ -2501,113 +2424,14 @@ Wish you the absolute best! I'm here anytime you need me... Kisses & Hugs! 💋�
       renderAdminManageList();
     }
 
-    // ============================================================
-    // CHAT
-    // ============================================================
-    async function openChat() {
-      playAudioTone(500, 'sine', 0.08);
-      const panel = document.getElementById('chat-panel');
-      panel.classList.remove('hidden');
-      panel.classList.add('flex');
-      await renderChatMessages();
-      await sSet('chat:lastSeenAt:' + (currentUser ? currentUser.role : 'guest'), new Date().toISOString(), false);
-      refreshChatBadge();
-      if (chatPollTimer) clearInterval(chatPollTimer);
-      chatPollTimer = setInterval(async () => {
-        await renderChatMessages();
-        await sSet('chat:lastSeenAt:' + (currentUser ? currentUser.role : 'guest'), new Date().toISOString(), false);
-        refreshChatBadge();
-      }, 4000);
-    }
-
-    function closeChat() {
-      const panel = document.getElementById('chat-panel');
-      panel.classList.add('hidden');
-      panel.classList.remove('flex');
-      if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
-    }
-
-    async function renderChatMessages() {
-      const log = (await sGet('chat:messages', true)) || [];
-      const container = document.getElementById('chat-messages');
-      if (log.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 text-xs text-pinkapp-muted font-semibold">No messages yet — say hi! 💌</div>`;
-        return;
-      }
-      const myRole = currentUser ? currentUser.role : null;
-      container.innerHTML = log.map(msg => {
-        if (msg.from === 'system') {
-          return `<div class="text-center"><span class="inline-block text-[10.5px] bg-pink-100 text-pinkapp-dark font-fredoka font-semibold px-3 py-1 rounded-full">${escapeHtml(msg.text)}</span></div>`;
-        }
-        const mine = msg.from === myRole;
-        const label = msg.from === 'admin' ? 'Admin' : 'Todd';
-        const dt = new Date(msg.ts);
-        const timeStr = dt.toLocaleTimeString('en-US', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
-        return `
-          <div class="flex ${mine ? 'justify-end' : 'justify-start'}">
-            <div class="max-w-[75%] ${mine ? 'chat-bubble-mine' : 'chat-bubble-theirs'} px-3.5 py-2 shadow-sm">
-              ${!mine ? `<p class="text-[9.5px] font-fredoka font-bold opacity-70 mb-0.5">${label}</p>` : ''}
-              <p class="text-[13px] font-semibold leading-snug whitespace-pre-wrap">${escapeHtml(msg.text)}</p>
-              <p class="text-[9px] opacity-70 text-right mt-0.5">${timeStr}</p>
-            </div>
-          </div>
-        `;
-      }).join('');
-      container.scrollTop = container.scrollHeight;
-    }
-
-    async function sendChatMessage() {
-      const input = document.getElementById('chat-input');
-      const text = input.value.trim();
-      if (!text || !currentUser) return;
-      const log = (await sGet('chat:messages', true)) || [];
-      log.push({
-        id: 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9),
-        from: currentUser.role,
-        text,
-        ts: new Date().toISOString()
-      });
-      if (log.length > 200) log.splice(0, log.length - 200);
-      await sSet('chat:messages', log, true);
-      input.value = '';
-      playAudioTone(650, 'sine', 0.08);
-      await renderChatMessages();
-    }
-
-    async function refreshChatBadge() {
-      if (!currentUser) return;
-      const log = (await sGet('chat:messages', true)) || [];
-      const lastSeen = await sGet('chat:lastSeenAt:' + currentUser.role, false);
-      const lastSeenTime = lastSeen ? new Date(lastSeen).getTime() : 0;
-      const unread = log.filter(m => m.from !== currentUser.role && m.from !== 'system' && new Date(m.ts).getTime() > lastSeenTime).length;
-      const badge = document.getElementById('chat-unread-badge');
-      if (unread > 0) {
-        badge.innerText = unread > 9 ? '9+' : String(unread);
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
-    }
-
-    function startBadgePolling() {
-      stopBadgePolling();
-      badgePollTimer = setInterval(() => { refreshChatBadge(); }, 9000);
-    }
-    function stopBadgePolling() {
-      if (badgePollTimer) { clearInterval(badgePollTimer); badgePollTimer = null; }
-    }
-
     function stopAllPolling() {
-      stopBadgePolling();
       stopUsagePolling();
       stopToddMissionsPolling();
-      if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
       if (window._bdayInterval) { clearInterval(window._bdayInterval); window._bdayInterval = null; }
     }
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && currentUser) {
-        refreshChatBadge();
         if (currentUser.role === 'admin' && adminActiveTab === 'usage') refreshAdminUsage();
       }
     });

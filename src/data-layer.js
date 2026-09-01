@@ -8,9 +8,8 @@
 //
 //   settings/app                      (single doc, one field per setting)
 //   coupons/{couponId}                (field: deck = 'ready' | 'bday')
-//   usage/{entryId}                   (one redemption / mission per doc)
-//   chat/{messageId}                  (one message per doc)
-//   memories/{memoryId}               (one Safe Zone post per doc)
+  //   usage/{entryId}                   (one redemption / mission per doc)
+  //   memories/{memoryId}               (one Safe Zone post per doc)
 //   memories/{memoryId}/comments/{id} (comments as a subcollection)
 //
 // Real-time onSnapshot listeners keep an in-browser read cache (the
@@ -42,7 +41,6 @@ const uiRefresh = (key) => {
 }
 
 const USAGE_CAP = 300
-const CHAT_CAP = 200
 
 // ---- runtime state -----------------------------------------------------
 let firestoreReady = false           // true once anonymous auth succeeded
@@ -53,7 +51,6 @@ const unsubs = []
 // in-memory mirrors of each collection (id -> document data)
 const couponCache = new Map()
 const usageCache = new Map()
-const chatCache = new Map()
 const memCache = new Map()
 const memCommentsCache = new Map()   // memId -> Map(commentId -> data)
 const memCommentUnsubs = new Map()   // memId -> unsubscribe fn
@@ -68,7 +65,6 @@ function makeSignal() {
 const firstSync = {
   coupons: makeSignal(),
   usage: makeSignal(),
-  chat: makeSignal(),
   memories: makeSignal(),
   settings: makeSignal(),
 }
@@ -91,7 +87,6 @@ function keyToTarget(key) {
   if (key === "coupons:ready") return { kind: "couponsDeck", deck: "ready" }
   if (key === "coupons:bday") return { kind: "couponsDeck", deck: "bday" }
   if (key === "usage:log") return { kind: "usage" }
-  if (key === "chat:messages") return { kind: "chat" }
   if (key === "safezone:index") return { kind: "memIndex" }
   if (key.startsWith("safezone:post:")) return { kind: "memPost", id: key.slice("safezone:post:".length) }
   if (key.startsWith("settings:")) return { kind: "setting", field: key.slice("settings:".length) }
@@ -126,14 +121,6 @@ function rebuildUsage() {
   )
   cacheWrite("usage:log", arr.slice(-USAGE_CAP))
   uiRefresh("usage:log")
-}
-
-function rebuildChat() {
-  const arr = [...chatCache.values()].sort(
-    (a, b) => new Date(a.ts || 0) - new Date(b.ts || 0),
-  )
-  cacheWrite("chat:messages", arr.slice(-CHAT_CAP))
-  uiRefresh("chat:messages")
 }
 
 function rebuildSettings() {
@@ -210,14 +197,6 @@ function attachListeners() {
     rebuildUsage()
     signalReady("usage")
   }, (err) => console.warn("[kindness-repo] usage listener:", err)))
-
-  // Chat
-  unsubs.push(onSnapshot(collection(db, "chat"), (snap) => {
-    chatCache.clear()
-    snap.forEach((d) => chatCache.set(d.id, { id: d.id, ...d.data() }))
-    rebuildChat()
-    signalReady("chat")
-  }, (err) => console.warn("[kindness-repo] chat listener:", err)))
 
   // Settings (single document)
   unsubs.push(onSnapshot(doc(db, "settings", "app"), (snap) => {
@@ -361,7 +340,6 @@ async function sSet(key, value, shared) {
     switch (t.kind) {
       case "couponsDeck": await writeCouponsDeck(t.deck, value); break
       case "usage": await upsertDiff("usage", value, usageCache); break
-      case "chat": await upsertDiff("chat", value, chatCache); break
       case "memIndex": await writeMemIndexDiff(value); break
       case "memPost": await writeMemPost(t.id, value); break
       case "setting": await writeSetting(t.field, value); break
@@ -393,7 +371,7 @@ async function seedSharedKey(key, fallback) {
 
   // Wait (briefly) for the first real read so we don't double-seed.
   const nameByKind = {
-    couponsDeck: "coupons", usage: "usage", chat: "chat",
+    couponsDeck: "coupons", usage: "usage",
     memIndex: "memories", memPost: "memories", setting: "settings",
   }
   const signalName = nameByKind[t.kind]
@@ -416,7 +394,7 @@ async function seedSharedKey(key, fallback) {
       await writeSetting(t.field, fallback)
     }
   } else {
-    // usage / chat / memIndex: empty arrays need no remote seeding.
+    // usage / memIndex: empty arrays need no remote seeding.
     if (cacheRead(key) === null) cacheWrite(key, fallback)
   }
 }
@@ -425,7 +403,7 @@ async function pullRemoteKey(key) {
   await ensureListeners()
   const t = keyToTarget(key)
   const nameByKind = {
-    couponsDeck: "coupons", usage: "usage", chat: "chat",
+    couponsDeck: "coupons", usage: "usage",
     memIndex: "memories", memPost: "memories", setting: "settings",
   }
   const signalName = nameByKind[t.kind]

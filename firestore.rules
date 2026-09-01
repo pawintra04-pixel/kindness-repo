@@ -16,7 +16,6 @@ rules_version = '2';
 //   settings/app                       -> app settings (single shared doc)
 //   coupons/{couponId}                 -> one coupon per doc (deck field)
 //   usage/{entryId}                    -> one redemption / mission per doc
-//   chat/{messageId}                   -> one chat message per doc
 //   memories/{memoryId}                -> one Safe Zone post per doc
 //   memories/{memoryId}/comments/{id}  -> comments as a subcollection
 //
@@ -63,13 +62,6 @@ service cloud.firestore {
     // Usage log: one document per redemption / mission entry.
     // The other half of the atomic redemption batch.
     match /usage/{entryId} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() && withinSizeLimit();
-      allow delete: if signedIn();
-    }
-
-    // Chat: one document per message (may carry inline media).
-    match /chat/{messageId} {
       allow read: if signedIn();
       allow create, update: if signedIn() && withinSizeLimit();
       allow delete: if signedIn();
