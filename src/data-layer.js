@@ -303,13 +303,20 @@ async function upsertDiff(colName, arr, cacheMap) {
 function stripId(o) { const { id, ...rest } = o; return rest }
 
 async function writeMemIndexDiff(arr) {
+  // Posts are the source of truth for a memory: sSet('safezone:post:<id>')
+  // always runs first and writes the full document (media + full caption).
+  // The index is DERIVED from those post docs in rebuildMemIndex(), so this
+  // write only needs to backfill a lightweight stub for the edge case where
+  // an index entry has no corresponding post yet. It intentionally omits
+  // `caption` and `media` so it can never clobber the full post if the two
+  // writes race before the memories listener updates memCache.
   const ops = []
   ;(Array.isArray(arr) ? arr : []).forEach((item) => {
     if (!item || !item.id) return
     if (!memCache.has(item.id)) {
       ops.push((b) => b.set(doc(db, "memories", item.id), {
         id: item.id, ts: item.ts, type: item.type,
-        caption: item.caption, by: item.by, byName: item.byName,
+        by: item.by, byName: item.byName,
       }, { merge: true }))
     }
   })
